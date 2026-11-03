@@ -91,21 +91,61 @@ def collect(coll, model, names, kind, fixed_backdrops, symbols_all, out):
     collect(coll, model, names[mid:], kind, fixed_backdrops, symbols_all, out)
 
 
+def norm(s):
+    return s.replace("’", "'").replace("‘", "'").strip().lower()
+
+
+_models_cache = {}
+
+
+def canonical_model(coll, model):
+    if coll not in _models_cache:
+        names = set()
+        for market in ("portals", "mrkt"):
+            try:
+                names |= set(get("/history/models-floors",
+                                 {"collectionName": coll, "market": market}) or {})
+            except RuntimeError:
+                pass
+        _models_cache[coll] = {norm(n): n for n in names}
+    return _models_cache[coll].get(norm(model), model)
+
+
 def main():
     if not TOKEN:
         sys.exit("Set GIFT_SATELLITE_TOKEN")
     RAW.mkdir(exist_ok=True)
     backdrops = [b["name"] for b in get("/gift/backdrops") if "," not in b["name"]]
     symbols = [s["name"] for s in get("/gift/symbols") if "," not in s["name"]]
+    collections = {norm(c["name"]): c["name"] for c in get("/gift/collections", {"premarket": "0"})}
     rows = list(csv.DictReader(SRC.open(encoding="utf-8")))
     out = []
     for i, row in enumerate(rows, 1):
         coll, model = row["collection"], row["model"]
         raw_file = RAW / f"{coll}__{model}.json".replace("/", "_")
+        note = ""
         if raw_file.exists():
             items = json.loads(raw_file.read_text(encoding="utf-8"))
+        elif norm(coll) not in collections:
+            items, note = [], "collection not on markets"
         else:
-            items = search(coll, model)
+            coll = collections[norm(coll)]
+            model = canonical_model(coll, model)
+            try:
+                items = search(coll, model)
+            except RuntimeError as e:
+                if not str(e).startswith("400"):
+                    raise
+                items, note = [], "model not recognised by API"
+                print(f"  SKIP {coll}/{model}: {e}", flush=True)
+                coll, model = row["collection"], row["model"]
+                out.append({
+                    "collection": coll, "model": model,
+                    "casemint_price_ton": row["price_ton"],
+                    "portals_lots": 0, "portals_locked_lots": 0,
+                    "portals_floor_ton": "", "portals_buyout_ton": 0, "note": note,
+                })
+                continue
             if len(items) >= CAP:
                 items = []
                 collect(coll, model, backdrops, "backdrops", (), symbols, items)
@@ -116,13 +156,14 @@ def main():
             raw_file.write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")
         prices = [float(x["normalizedPrice"]) for x in items]
         out.append({
-            "collection": coll,
-            "model": model,
+            "collection": row["collection"],
+            "model": row["model"],
             "casemint_price_ton": row["price_ton"],
             "portals_lots": len(items),
             "portals_locked_lots": sum(1 for x in items if x.get("isLocked")),
             "portals_floor_ton": round(prices[0], 3) if prices else "",
             "portals_buyout_ton": round(sum(prices), 3),
+            "note": note,
         })
         print(f"[{i}/{len(rows)}] {coll} / {model}: {len(items)} lots, "
               f"buyout {out[-1]['portals_buyout_ton']} TON", flush=True)
