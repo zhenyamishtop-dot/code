@@ -13,25 +13,39 @@ Writes portals_cheapest_buyout_all.csv (every model checked, sorted by buyout).
 """
 import csv
 import json
+import os
+import time
 
 import portals_lots as pl
 
 MARGIN = 1.5
+# only collections whose Portals floor (cheapest model floor) is at most this
+COLL_FLOOR_MAX = float(os.environ.get("COLL_FLOOR_MAX", "inf"))
+FLOORS = "portals_all_floors.json"
 OUT = "portals_cheapest_buyout_all.csv"
 
 
 def main():
     if not pl.TOKEN:
         raise SystemExit("Set GIFT_SATELLITE_TOKEN")
-    collections = [c["name"] for c in pl.get("/gift/collections", {"premarket": "0"})]
-    floors = []
-    for i, coll in enumerate(collections, 1):
-        d = pl.get("/history/models-floors", {"collectionName": coll, "market": "portals"}) or {}
-        floors += [(float(f), coll, m) for m, f in d.items() if f]
-        print(f"floors {i}/{len(collections)} {coll}: {len(d)} models", flush=True)
-    floors.sort()
-    print("models with Portals floor:", len(floors), flush=True)
-    json.dump(floors, open("portals_all_floors.json", "w", encoding="utf-8"), ensure_ascii=False)
+    if os.path.exists(FLOORS) and time.time() - os.path.getmtime(FLOORS) < 3 * 3600:
+        floors = [tuple(x) for x in json.load(open(FLOORS, encoding="utf-8"))]
+    else:
+        collections = [c["name"] for c in pl.get("/gift/collections", {"premarket": "0"})]
+        floors = []
+        for i, coll in enumerate(collections, 1):
+            d = pl.get("/history/models-floors", {"collectionName": coll, "market": "portals"}) or {}
+            floors += [(float(f), coll, m) for m, f in d.items() if f]
+            print(f"floors {i}/{len(collections)} {coll}: {len(d)} models", flush=True)
+        floors.sort()
+        json.dump(floors, open(FLOORS, "w", encoding="utf-8"), ensure_ascii=False)
+    coll_floor = {}
+    for f, coll, _ in floors:
+        coll_floor[coll] = min(f, coll_floor.get(coll, f))
+    keep = {c for c, f in coll_floor.items() if f <= COLL_FLOOR_MAX}
+    floors = sorted(x for x in floors if x[1] in keep)
+    print(f"collections with floor <= {COLL_FLOOR_MAX} TON: {len(keep)}; "
+          f"models to consider: {len(floors)}", flush=True)
 
     best = float("inf")
     results = []
