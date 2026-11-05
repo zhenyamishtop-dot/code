@@ -28,7 +28,8 @@ COLL_FLOOR_MAX = float(os.environ.get("COLL_FLOOR_MAX", "inf"))
 FLOORS = "portals_all_floors.json"
 OUT = "portals_fast_cheapest_buyout.csv"
 
-best = float("inf")
+# optional known upper bound (e.g. a buyout seen earlier) to prune from the start
+best = float(os.environ.get("INITIAL_BEST", "inf"))
 results = {}
 requests = 0
 
