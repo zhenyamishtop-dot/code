@@ -22,8 +22,10 @@ from collections import defaultdict
 import portals_lots as pl
 
 pl.DELAY = float(os.environ.get("DELAY", "0.5"))
-MARGIN = 1.5
-BATCH = 40
+MARGIN = float(os.environ.get("MARGIN", "1.5"))
+BATCH = int(os.environ.get("BATCH", "8"))
+# collections already covered by an earlier run (comma-separated)
+SKIP = {s.strip() for s in os.environ.get("SKIP_COLLECTIONS", "").split(",") if s.strip()}
 COLL_FLOOR_MAX = float(os.environ.get("COLL_FLOOR_MAX", "inf"))
 FLOORS = "portals_all_floors.json"
 OUT = "portals_fast_cheapest_buyout.csv"
@@ -78,9 +80,11 @@ def resolve(coll, models):
         else:
             record(coll, models[0], items, capped=True)
         return
-    mid = len(models) // 2
-    resolve(coll, models[:mid])
-    resolve(coll, [m for m in models[mid:] if floor_of[(coll, m)] <= best * MARGIN])
+    # capped batch: in cheap collections most models have many lots, so going
+    # straight to single-model queries costs fewer requests than halving
+    for m in models:
+        if floor_of[(coll, m)] <= best * MARGIN:
+            resolve(coll, [m])
 
 
 def main():
@@ -90,7 +94,7 @@ def main():
         coll_floor[coll] = min(f, coll_floor.get(coll, f))
     per_coll = defaultdict(list)
     for f, coll, m in sorted(floors):
-        if coll_floor[coll] <= COLL_FLOOR_MAX:
+        if coll_floor[coll] <= COLL_FLOOR_MAX and coll not in SKIP:
             per_coll[coll].append(m)
             floor_of[(coll, m)] = f
     print(f"collections: {len(per_coll)}, models: {sum(map(len, per_coll.values()))}", flush=True)
