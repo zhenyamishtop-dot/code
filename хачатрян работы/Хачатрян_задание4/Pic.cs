@@ -9,10 +9,10 @@ namespace Хачатрян_задание4
 {
     public class Pic
     {
-        int x = 200, y = 200;   // Положение
-        int dir = 1;            // Направление: 1 - влево, 2 - вправо, 3 - вверх, 4 - вниз.
-        int size = 80;          // Размер
-        int step = 3;           // Шаг за один тик таймера
+        int x = 200, y = 200;
+        int dir = 1;
+        int size = 80;
+        int step = 3;
 
         public int X { get => x; set => x = value; }
         public int Y { get => y; set => y = value; }
@@ -27,7 +27,6 @@ namespace Хачатрян_задание4
             size = Sz;
         }
 
-        // Методы движения. За границу контейнера не выходим - иначе стоим.
         public void Left()
         {
             if (x - step >= 0)
@@ -36,7 +35,6 @@ namespace Хачатрян_задание4
 
         public void Right(PictureBox Pb)
         {
-            // Ширина клиентской области контейнера, в котором лежит картинка.
             int W = Pb.Parent.ClientSize.Width;
             if (x + size + step <= W)
                 x += step;
@@ -50,16 +48,11 @@ namespace Хачатрян_задание4
 
         public void Down(PictureBox Pb)
         {
-            // Высота клиентской области контейнера.
             int H = Pb.Parent.ClientSize.Height;
             if (y + size + step <= H)
                 y += step;
         }
 
-        // Метод отражения: выбрать направление,
-        //                  изменить координату,
-        //                  изменить размер,
-        //                  отрисовать.
         public void Draw(PictureBox Pb)
         {
             switch (dir)

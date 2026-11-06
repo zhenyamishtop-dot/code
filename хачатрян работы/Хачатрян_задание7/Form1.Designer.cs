@@ -302,7 +302,7 @@
             this.знакиПрепинанияToolStripMenuItem.Name = "знакиПрепинанияToolStripMenuItem";
             this.знакиПрепинанияToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F9;
             this.знакиПрепинанияToolStripMenuItem.Size = new System.Drawing.Size(260, 22);
-            this.знакиПрепинанияToolStripMenuItem.Text = "Знаки . ? ! в тексте (вариант 4)";
+            this.знакиПрепинанияToolStripMenuItem.Text = "Подсчет знаков . ? !";
             this.знакиПрепинанияToolStripMenuItem.Click += new System.EventHandler(this.знакиПрепинанияToolStripMenuItem_Click);
             // 
             // диалогиToolStripMenuItem

@@ -7,8 +7,6 @@ using System.Threading.Tasks;
 
 namespace Хачатрян_задание9
 {
-    // Данные об одном человеке: имя, дата рождения, должность, отдел, оклад.
-    // DisplayName - это заголовок столбца, который DataGridView берет сам.
     public class Record
     {
         [DisplayName("Имя")]
@@ -26,7 +24,6 @@ namespace Хачатрян_задание9
         [DisplayName("Оклад")]
         public double Money { get; set; }
 
-        // Конструктор по умолчанию.
         public Record()
         {
             Name = "";
@@ -36,7 +33,6 @@ namespace Хачатрян_задание9
             Money = 0;
         }
 
-        // Конструктор с параметрами.
         public Record(String name, DateTime birthday, String profession, String department, double money)
         {
             Name = name;

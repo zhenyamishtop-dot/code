@@ -12,7 +12,6 @@ namespace Хачатрян_задание3
 {
     public partial class Form1 : Form
     {
-        // Объект создается один раз, дальше только меняются его поля.
         Lunch lunch = new Lunch("Суп-лапша", 150, "Плов", 240, "Морс", 70);
 
         public Form1()
@@ -31,7 +30,6 @@ namespace Хачатрян_задание3
             ShowState();
         }
 
-        // Ввод цены с умолчанием: если не парсится или меньше нуля, то 0.
         private double ReadPrice(TextBox tb)
         {
             double x;
@@ -40,16 +38,13 @@ namespace Хачатрян_задание3
             return x;
         }
 
-        // Показать текущее состояние объекта.
         private void ShowState()
         {
             textBox9.Text = lunch.ToString();
-            // старые результаты методов уже не актуальны
             textBox7.Text = "";
             textBox8.Text = "";
         }
 
-        // Каждое поле ввода меняет только свое поле объекта.
         private void textBox1_TextChanged(object sender, EventArgs e)
         {
             lunch.Dish1 = textBox1.Text;
@@ -86,7 +81,6 @@ namespace Хачатрян_задание3
             ShowState();
         }
 
-        // Методы объекта.
         private void button1_Click(object sender, EventArgs e)
         {
             textBox7.Text = lunch.TotalCost().ToString() + " руб.";

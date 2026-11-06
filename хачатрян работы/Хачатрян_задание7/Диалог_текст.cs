@@ -12,8 +12,8 @@ namespace Хачатрян_задание7
 {
     public partial class Диалог_текст : Form
     {
-        public String Word = "";      // выделенный текст из редактора
-        public String NewWord = "";   // новое значение, которое вернется в редактор
+        public String Word = "";
+        public String NewWord = "";
 
         public Диалог_текст()
         {
@@ -25,14 +25,12 @@ namespace Хачатрян_задание7
             textBox1.Text = Word;
         }
 
-        // ОК
         private void button1_Click(object sender, EventArgs e)
         {
             NewWord = textBox2.Text;
             DialogResult = DialogResult.OK;
         }
 
-        // Отмена
         private void button2_Click(object sender, EventArgs e)
         {
             DialogResult = DialogResult.Cancel;

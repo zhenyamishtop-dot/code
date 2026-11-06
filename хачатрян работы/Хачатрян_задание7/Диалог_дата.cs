@@ -12,10 +12,10 @@ namespace Хачатрян_задание7
 {
     public partial class Диалог_дата : Form
     {
-        DateTime thisDay;   // сегодня
-        DateTime allDay;    // дата, выбранная в календаре
+        DateTime thisDay;
+        DateTime allDay;
 
-        public String DateText = "";   // что вернется в редактор
+        public String DateText = "";
 
         public Диалог_дата()
         {
@@ -27,10 +27,9 @@ namespace Хачатрян_задание7
             thisDay = DateTime.Today;
             textBox1.Text = thisDay.ToLongDateString();
             allDay = monthCalendar1.SelectionStart;
-            listBox1.SelectedIndex = 1;   // по умолчанию длинный формат
+            listBox1.SelectedIndex = 1;
         }
 
-        // Показать выбранную дату в нужном формате.
         private void ShowDate()
         {
             if (listBox1.SelectedIndex == 0)
@@ -50,14 +49,12 @@ namespace Хачатрян_задание7
             ShowDate();
         }
 
-        // ОК
         private void button1_Click(object sender, EventArgs e)
         {
             DateText = textBox2.Text;
             DialogResult = DialogResult.OK;
         }
 
-        // Отмена
         private void button2_Click(object sender, EventArgs e)
         {
             DialogResult = DialogResult.Cancel;

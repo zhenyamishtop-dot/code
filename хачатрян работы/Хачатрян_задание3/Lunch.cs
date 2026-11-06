@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 
 namespace Хачатрян_задание3
 {
-    // Вариант 22. Объект "ланч": название трех блюд, стоимость каждого.
     public class Lunch
     {
         private string dish1;
@@ -16,9 +15,8 @@ namespace Хачатрян_задание3
         private double price2;
         private double price3;
 
-        private const double discount = 5;   // скидка за комплексность, %
+        private const double discount = 5;
 
-        // Конструктор по умолчанию.
         public Lunch()
         {
             dish1 = "";
@@ -29,7 +27,6 @@ namespace Хачатрян_задание3
             price3 = 0;
         }
 
-        // Конструктор с параметрами.
         public Lunch(string d1, double p1, string d2, double p2, string d3, double p3)
         {
             dish1 = d1;
@@ -40,7 +37,6 @@ namespace Хачатрян_задание3
             price3 = p3;
         }
 
-        // Аксессоры для доступа к названиям блюд.
         public string Dish1
         {
             get => dish1;
@@ -59,7 +55,6 @@ namespace Хачатрян_задание3
             set => dish3 = value;
         }
 
-        // Стоимость блюд (нужна, чтобы менять цены с формы).
         public double Price1
         {
             get => price1;
@@ -78,13 +73,11 @@ namespace Хачатрян_задание3
             set => price3 = value;
         }
 
-        // Общая стоимость всех блюд.
         public double TotalCost()
         {
             return price1 + price2 + price3;
         }
 
-        // Цена ланча с учетом скидки 5% за комплексность.
         public double CostWithDiscount()
         {
             return TotalCost() * (100 - discount) / 100;

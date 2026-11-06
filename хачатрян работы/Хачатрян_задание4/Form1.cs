@@ -21,21 +21,18 @@ namespace Хачатрян_задание4
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            // Рисунки для пунктов "Вид" (такие же стоят на пунктах меню).
             imageList1.Images.Add(Properties.Resources.robot);
             imageList1.Images.Add(Properties.Resources.ufo);
             imageList1.Images.Add(Properties.Resources.rocket);
 
-            toolStripComboBox1.SelectedIndex = 1;   // по умолчанию быстро
+            toolStripComboBox1.SelectedIndex = 1;
         }
 
-        // Таймер включен сразу (Enabled = true в свойствах).
         private void timer1_Tick(object sender, EventArgs e)
         {
             myperson.Draw(pictureBox1);
         }
 
-        // ---------- Направление ----------
         private void налевоToolStripMenuItem_Click(object sender, EventArgs e)
         {
             myperson.Dir = 1;
@@ -56,7 +53,6 @@ namespace Хачатрян_задание4
             myperson.Dir = 4;
         }
 
-        // ---------- Вид ----------
         private void роботToolStripMenuItem_Click(object sender, EventArgs e)
         {
             pictureBox1.Image = imageList1.Images[0];
@@ -72,7 +68,6 @@ namespace Хачатрян_задание4
             pictureBox1.Image = imageList1.Images[2];
         }
 
-        // ---------- Размер ----------
         private void маленькийToolStripMenuItem_Click(object sender, EventArgs e)
         {
             myperson.Size = 60;
@@ -83,7 +78,6 @@ namespace Хачатрян_задание4
             myperson.Size = 120;
         }
 
-        // ---------- Скорость ----------
         private void медленноToolStripMenuItem_Click(object sender, EventArgs e)
         {
             timer1.Interval = 300;
@@ -94,13 +88,11 @@ namespace Хачатрян_задание4
             timer1.Interval = 100;
         }
 
-        // ---------- Выход ----------
         private void выходToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Close();
         }
 
-        // Контекстное меню картинки повторяет пункты меню "Вид".
         private void роботToolStripMenuItem1_Click(object sender, EventArgs e)
         {
             роботToolStripMenuItem_Click(sender, e);
@@ -116,7 +108,6 @@ namespace Хачатрян_задание4
             ракетаToolStripMenuItem_Click(sender, e);
         }
 
-        // Один обработчик на всю панель инструментов, кнопки вызывают пункты меню.
         private void toolStrip1_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
             switch (toolStrip1.Items.IndexOf(e.ClickedItem))
@@ -128,7 +119,6 @@ namespace Хачатрян_задание4
             }
         }
 
-        // Выпадающий список скорости на панели тоже вызывает пункты меню.
         private void toolStripComboBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
             switch (toolStripComboBox1.SelectedIndex)

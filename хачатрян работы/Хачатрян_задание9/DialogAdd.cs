@@ -22,7 +22,6 @@ namespace Хачатрян_задание9
             listBox1.SelectedIndex = 0;
         }
 
-        // Ввод оклада с умолчанием: если не парсится, то 0.
         private double ReadMoney()
         {
             double x;
@@ -31,14 +30,13 @@ namespace Хачатрян_задание9
             return x;
         }
 
-        // ОК
         private void button1_Click(object sender, EventArgs e)
         {
             if (!String.IsNullOrEmpty(textBox1.Text) && !String.IsNullOrEmpty(textBox2.Text) && !String.IsNullOrEmpty(textBox3.Text))
             {
                 Record Tmp = new Record(textBox1.Text, dateTimePicker1.Value.Date, textBox2.Text,
                                         listBox1.SelectedItem.ToString(), ReadMoney());
-                Form1.Rec = Tmp;   // передается основной форме
+                Form1.Rec = Tmp;
                 DialogResult = DialogResult.OK;
             }
             else
@@ -50,7 +48,6 @@ namespace Хачатрян_задание9
             }
         }
 
-        // Отмена
         private void button2_Click(object sender, EventArgs e)
         {
             DialogResult = DialogResult.Cancel;
