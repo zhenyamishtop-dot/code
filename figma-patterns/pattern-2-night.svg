@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+<title>Паттерн 2 — Ночной</title>
+<defs>
+<clipPath id="clip-1"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-2"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-3"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-4"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-5"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-6"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-7"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-8"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-9"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-10"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-11"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-12"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-13"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-14"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-15"><rect width="300" height="300"/></clipPath>
+<clipPath id="clip-16"><rect width="300" height="300"/></clipPath>
+</defs>
+<g id="01 Арка" transform="translate(0 0)" clip-path="url(#clip-1)">
+  <rect id="bg" width="300" height="300" fill="#241A4A"/>
+  <path d="M60.0 300 V150.0 A90.0 90.0 0 0 1 240.0 150.0 V300 Z" fill="#F48FB1"/>
+</g>
+<g id="02 Луна" transform="translate(300 0)" clip-path="url(#clip-2)">
+  <rect id="bg" width="300" height="300" fill="#F48FB1"/>
+  <circle cx="140" cy="150" r="100" fill="#FFF3E3"/><circle cx="185" cy="120" r="85" fill="#F48FB1"/>
+</g>
+<g id="03 Плюс" transform="translate(600 0)" clip-path="url(#clip-3)">
+  <rect id="bg" width="300" height="300" fill="#6FD6C0"/>
+  <rect x="120" y="50" width="60" height="200" rx="0" fill="#241A4A"/><rect x="50" y="120" width="200" height="60" rx="0" fill="#241A4A"/>
+</g>
+<g id="04 Песочные часы" transform="translate(900 0)" clip-path="url(#clip-4)">
+  <rect id="bg" width="300" height="300" fill="#FFF3E3"/>
+  <polygon points="50,40 250,40 150,150" fill="#241A4A"/><polygon points="50,260 250,260 150,150" fill="#F48FB1"/>
+</g>
+<g id="05 Лист" transform="translate(0 300)" clip-path="url(#clip-5)">
+  <rect id="bg" width="300" height="300" fill="#FFF3E3"/>
+  <path d="M50 250 A200 200 0 0 1 250 50 A200 200 0 0 1 50 250 Z" fill="#6FD6C0"/>
+</g>
+<g id="06 Круг" transform="translate(300 300)" clip-path="url(#clip-6)">
+  <rect id="bg" width="300" height="300" fill="#241A4A"/>
+  <circle cx="150" cy="150" r="100" fill="#6FD6C0"/>
+</g>
+<g id="07 Три круга" transform="translate(600 300)" clip-path="url(#clip-7)">
+  <rect id="bg" width="300" height="300" fill="#F48FB1"/>
+  <circle cx="60" cy="150" r="40" fill="#FFF3E3"/><circle cx="150" cy="150" r="40" fill="#FFF3E3"/><circle cx="240" cy="150" r="40" fill="#FFF3E3"/>
+</g>
+<g id="08 Ромб" transform="translate(900 300)" clip-path="url(#clip-8)">
+  <rect id="bg" width="300" height="300" fill="#6FD6C0"/>
+  <polygon points="150,40 260,150 150,260 40,150" fill="#FFF3E3"/>
+</g>
+<g id="09 Шахматка" transform="translate(0 600)" clip-path="url(#clip-9)">
+  <rect id="bg" width="300" height="300" fill="#F48FB1"/>
+  <rect x="0" y="0" width="150" height="150" rx="0" fill="#241A4A"/><rect x="150" y="150" width="150" height="150" rx="0" fill="#241A4A"/>
+</g>
+<g id="10 Радуга" transform="translate(300 600)" clip-path="url(#clip-10)">
+  <rect id="bg" width="300" height="300" fill="#FFF3E3"/>
+  <circle cx="150" cy="300" r="140" fill="#F48FB1"/><circle cx="150" cy="300" r="90" fill="#FFF3E3"/><circle cx="150" cy="300" r="45" fill="#6FD6C0"/>
+</g>
+<g id="11 Четверть круга" transform="translate(600 600)" clip-path="url(#clip-11)">
+  <rect id="bg" width="300" height="300" fill="#241A4A"/>
+  <circle cx="300" cy="0" r="240" fill="#6FD6C0"/>
+</g>
+<g id="12 Звезда" transform="translate(900 600)" clip-path="url(#clip-12)">
+  <rect id="bg" width="300" height="300" fill="#F48FB1"/>
+  <polygon points="150,40 178,122 260,150 178,178 150,260 122,178 40,150 122,122" fill="#241A4A"/>
+</g>
+<g id="13 Кольцо" transform="translate(0 900)" clip-path="url(#clip-13)">
+  <rect id="bg" width="300" height="300" fill="#F48FB1"/>
+  <circle cx="150" cy="150" r="110" fill="#FFF3E3"/><circle cx="150" cy="150" r="60" fill="#F48FB1"/>
+</g>
+<g id="14 Треугольник" transform="translate(300 900)" clip-path="url(#clip-14)">
+  <rect id="bg" width="300" height="300" fill="#241A4A"/>
+  <polygon points="150,50 260,250 40,250" fill="#6FD6C0"/>
+</g>
+<g id="15 Полосы" transform="translate(600 900)" clip-path="url(#clip-15)">
+  <rect id="bg" width="300" height="300" fill="#6FD6C0"/>
+  <rect x="40" y="0" width="40" height="300" rx="0" fill="#FFF3E3"/><rect x="130" y="0" width="40" height="300" rx="0" fill="#FFF3E3"/><rect x="220" y="0" width="40" height="300" rx="0" fill="#FFF3E3"/>
+</g>
+<g id="16 Арка 2" transform="translate(900 900)" clip-path="url(#clip-16)">
+  <rect id="bg" width="300" height="300" fill="#FFF3E3"/>
+  <path d="M60.0 300 V150.0 A90.0 90.0 0 0 1 240.0 150.0 V300 Z" fill="#241A4A"/>
+</g>
+</svg>
