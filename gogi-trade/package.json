@@ -1,0 +1,12 @@
+{
+  "name": "gogi-trade",
+  "version": "1.0.0",
+  "description": "Gogi Trade — Telegram bot + mini app: instant alerts on new NFT gift listings (Portals, MRKT, Tonnel, Getgems) via the Gift Satellite API",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,104 @@
+// Polls Gift Satellite search for every watched collection on every market and emits new listings.
+import { EventEmitter } from 'node:events';
+import { config, MARKETS } from './config.js';
+import { sleep } from './util.js';
+
+const STATE_TTL_MS = 10 * 60_000;
+
+export function listingTime(item) {
+  const t = Math.max(Number(item.eventAt) || 0, Date.parse(item.createdAt) || 0);
+  return t || 0;
+}
+
+/**
+ * Pure change detector for one (market, target) stream.
+ * state: { baselined, seen: Map(giftKey -> { price, at }) }
+ * Returns events: { type: 'listing' | 'price_drop', item, oldPrice? }
+ */
+export function diffListings(state, items, { now = Date.now(), freshWindowMs = config.freshWindowSec * 1000 } = {}) {
+  const events = [];
+  for (const item of items) {
+    const key = String(item.giftId || item.slug || item._id);
+    const price = Number(item.normalizedPrice);
+    const prev = state.seen.get(key);
+    if (!prev) {
+      // Unseen item: a real new listing only if it was created recently —
+      // otherwise it merely slid into the 50-cheapest window after others sold.
+      if (state.baselined && now - listingTime(item) <= freshWindowMs) events.push({ type: 'listing', item });
+    } else if (price < prev.price - 1e-9) {
+      events.push({ type: 'price_drop', item, oldPrice: prev.price });
+    }
+    state.seen.set(key, { price, at: now });
+  }
+  state.baselined = true;
+  // forget items that left the window long ago
+  if (state.seen.size > 400) for (const [k, v] of state.seen) if (now - v.at > 3600_000) state.seen.delete(k);
+  return events;
+}
+
+export class Poller extends EventEmitter {
+  constructor(sat, floors, getTargets) {
+    super();
+    this.sat = sat;
+    this.floors = floors;
+    this.getTargets = getTargets;
+    this.states = new Map(); // market|targetKey -> { baselined, seen, touched }
+    this.cursor = Object.fromEntries(MARKETS.map(m => [m, 0]));
+    this.stats = Object.fromEntries(MARKETS.map(m => [m, { polls: 0, errors: 0, lastPollAt: 0, lastError: null, lastMs: 0 }]));
+    this.running = false;
+  }
+
+  start() {
+    this.running = true;
+    for (const m of MARKETS) this.loop(m);
+  }
+  stop() { this.running = false; }
+
+  async loop(market) {
+    while (this.running) {
+      const targets = this.getTargets().filter(t => t.markets.includes(market));
+      if (!targets.length) { await sleep(700); continue; }
+      const target = targets[this.cursor[market]++ % targets.length];
+      const st = this.stats[market];
+      const t0 = Date.now();
+      try {
+        const items = await this.sat.search(market, target.collection, target.query);
+        st.polls++; st.lastPollAt = Date.now(); st.lastMs = this.sat.lastMs?.['search:' + market] ?? Date.now() - t0;
+        this.process(market, target, Array.isArray(items) ? items : []);
+      } catch (e) {
+        st.errors++; st.lastError = e.message;
+        await sleep(300);
+      }
+    }
+  }
+
+  process(market, target, items) {
+    const key = market + '|' + target.key;
+    let state = this.states.get(key);
+    if (!state) { state = { baselined: false, seen: new Map(), touched: 0 }; this.states.set(key, state); }
+    // a target that was not polled for a while starts from a fresh baseline
+    if (state.touched && Date.now() - state.touched > STATE_TTL_MS) { state.baselined = false; state.seen.clear(); }
+    state.touched = Date.now();
+
+    const unfiltered = !target.query.models.length && !target.query.backdrops.length && !target.query.symbols.length;
+    if (unfiltered && items.length) {
+      this.floors.observeCollectionFloor(market, target.collection, Math.min(...items.map(i => Number(i.normalizedPrice)).filter(p => p > 0)));
+    }
+    if (process.env.DEBUG_POLL && state.baselined) {
+      for (const i of items) {
+        const k = String(i.giftId || i.slug || i._id);
+        if (!state.seen.has(k)) console.log(`[poll] unseen ${market} ${i.slug} ${i.normalizedPrice} age ${Math.round((Date.now() - listingTime(i)) / 1000)}s`);
+      }
+    }
+    for (const ev of diffListings(state, items)) this.emit(ev.type, { ...ev, market, detectedAt: Date.now() });
+
+    if (this.states.size > 2000) for (const [k, s] of this.states) if (Date.now() - s.touched > STATE_TTL_MS) this.states.delete(k);
+  }
+
+  /** Seconds one full pass over all targets takes on the busiest market. */
+  cycleSeconds() {
+    const targets = this.getTargets();
+    const perMarket = MARKETS.map(m => targets.filter(t => t.markets.includes(m)).length);
+    return Math.max(0, ...perMarket) * config.searchGapMs / 1000;
+  }
+}

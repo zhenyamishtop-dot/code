@@ -1,0 +1,142 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { diffListings } from '../src/poller.js';
+import { sanitizeSettings, matchListing, buildTargets } from '../src/filters.js';
+import { formatAlert, marketUrl, alertKeyboard } from '../src/notifier.js';
+import { validateInitData, signInitData } from '../src/telegram.js';
+import { fmtTon, norm, timeAgo, RateGate } from '../src/util.js';
+
+const NOW = Date.parse('2026-11-13T03:00:00Z');
+const item = (over = {}) => ({
+  slug: 'ScaredCat-17114', market: 'mrkt', giftId: 'abc-1', number: 17114, normalizedPrice: 273.97,
+  collectionName: 'Scared Cat', modelName: 'Purrlion', backdropName: 'Navy Blue', symbolName: 'Spider',
+  isLocked: false, createdAt: new Date(NOW - 2000).toISOString(), ...over,
+});
+
+test('diffListings: first batch is a silent baseline', () => {
+  const state = { baselined: false, seen: new Map() };
+  assert.deepEqual(diffListings(state, [item()], { now: NOW, freshWindowMs: 600_000 }), []);
+  assert.equal(state.baselined, true);
+});
+
+test('diffListings: fresh unseen item is a new listing, old unseen item is not', () => {
+  const state = { baselined: false, seen: new Map() };
+  diffListings(state, [item()], { now: NOW, freshWindowMs: 600_000 });
+  const fresh = item({ giftId: 'new-1', slug: 'ScaredCat-1' });
+  const slidIn = item({ giftId: 'old-1', slug: 'ScaredCat-2', createdAt: new Date(NOW - 3 * 3600_000).toISOString() });
+  const events = diffListings(state, [item(), fresh, slidIn], { now: NOW, freshWindowMs: 600_000 });
+  assert.deepEqual(events.map(e => [e.type, e.item.giftId]), [['listing', 'new-1']]);
+  // nothing is reported twice
+  assert.deepEqual(diffListings(state, [item(), fresh, slidIn], { now: NOW + 1000, freshWindowMs: 600_000 }), []);
+});
+
+test('diffListings: price drop on a known item', () => {
+  const state = { baselined: false, seen: new Map() };
+  diffListings(state, [item()], { now: NOW });
+  const events = diffListings(state, [item({ normalizedPrice: 250 })], { now: NOW + 1000 });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, 'price_drop');
+  assert.equal(events[0].oldPrice, 273.97);
+  // a price increase is not an event
+  assert.deepEqual(diffListings(state, [item({ normalizedPrice: 260 })], { now: NOW + 2000 }), []);
+});
+
+test('diffListings: portals eventAt (ms) counts as listing time', () => {
+  const state = { baselined: true, seen: new Map() };
+  const relisted = item({ giftId: 'p-1', market: 'portals', createdAt: new Date(NOW - 86400_000).toISOString(), eventAt: NOW - 3000 });
+  assert.equal(diffListings(state, [relisted], { now: NOW, freshWindowMs: 600_000 }).length, 1);
+});
+
+test('sanitizeSettings: drops junk, dedupes, validates numbers and unknown collections', () => {
+  const s = sanitizeSettings({
+    enabled: true, markets: { tonnel: false, bogus: true },
+    rules: [
+      { collection: ' Scared Cat ', models: ['Purrlion', 'Purrlion', 5, ''], maxPrice: '300', maxOverFloorPct: 'x' },
+      { collection: 'scared cat' },
+      { collection: 'Not A Gift' },
+      { nope: 1 },
+    ],
+  }, new Set(['scared cat']));
+  assert.deepEqual(s.markets, { portals: true, mrkt: true, tonnel: false, getgems: true });
+  assert.equal(s.rules.length, 1);
+  assert.deepEqual(s.rules[0], { collection: 'Scared Cat', enabled: true, models: ['Purrlion'], backdrops: [], symbols: [], maxPrice: 300, maxOverFloorPct: null });
+});
+
+test('matchListing: attributes, markets, price limits', () => {
+  const base = sanitizeSettings({ rules: [{ collection: 'Scared Cat', models: ['purrlion'], backdrops: ['Navy Blue'], maxPrice: 280, maxOverFloorPct: 70 }] });
+  assert.ok(matchListing(base, item(), 170));
+  assert.equal(matchListing(base, item({ modelName: 'Other' }), 170), null);
+  assert.equal(matchListing(base, item({ backdropName: 'Black' }), 170), null);
+  assert.equal(matchListing(base, item({ normalizedPrice: 281 }), 170), null);
+  assert.equal(matchListing(base, item(), 150), null, '273.97 is more than 70% above a 150 floor');
+  assert.ok(matchListing(base, item(), null), 'unknown floor does not block');
+  assert.equal(matchListing({ ...base, markets: { ...base.markets, mrkt: false } }, item(), 170), null);
+  assert.equal(matchListing({ ...base, enabled: false }, item(), 170), null);
+  const apostrophe = sanitizeSettings({ rules: [{ collection: "Durov's Cap" }] });
+  assert.ok(matchListing(apostrophe, item({ collectionName: 'Durov’s Cap' }), null));
+});
+
+test('buildTargets: API query only narrows when every rule narrows', () => {
+  const u = rules => ({ settings: sanitizeSettings({ rules }) });
+  let t = buildTargets([u([{ collection: 'Toy Bear', models: ['Cotton'] }]), u([{ collection: 'Toy Bear', models: ['Peanut'], backdrops: ['Black'] }])]);
+  assert.equal(t.length, 1);
+  assert.deepEqual(t[0].query, { models: ['Cotton', 'Peanut'], backdrops: [], symbols: [] });
+  t = buildTargets([u([{ collection: 'Toy Bear', models: ['Cotton'] }]), u([{ collection: 'Toy Bear' }])]);
+  assert.deepEqual(t[0].query.models, []);
+  t = buildTargets([{ settings: { ...sanitizeSettings({ rules: [{ collection: 'Toy Bear' }] }), enabled: false } }]);
+  assert.deepEqual(t, []);
+  t = buildTargets([{ settings: sanitizeSettings({ markets: { tonnel: false }, rules: [{ collection: 'Toy Bear' }, { collection: 'Lol Pop', enabled: false }] }) }]);
+  assert.deepEqual(t.map(x => x.collection), ['Toy Bear']);
+  assert.deepEqual(t[0].markets, ['portals', 'mrkt', 'getgems']);
+});
+
+test('formatAlert: contains listing, floors for 4 markets, sales with links; escapes HTML', () => {
+  const text = formatAlert({
+    type: 'listing', item: item({ modelName: 'Purr<lion>' }),
+    modelFloors: { portals: 170, mrkt: 268.5, tonnel: null, getgems: 300 }, collectionFloor: 148,
+    rarity: { model: 15, backdrop: 20, symbol: 4 },
+    sales: [{ slug: 'ScaredCat-15506', number: 15506, market: 'mrkt', normalizedPrice: 268.5, soldAt: new Date(NOW - 3600_000).toISOString() }],
+  }, NOW);
+  assert.match(text, /ЛИСТИНГ/);
+  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-17114">Scared Cat #17114<\/a> на <a href="https:\/\/t\.me\/mrkt\/app\?startapp=abc-1">MRKT<\/a> за <b>273\.97 TON<\/b>/);
+  assert.match(text, /Purr&lt;lion&gt;/);
+  assert.match(text, /Флор коллекции на MRKT: <b>148 TON<\/b>/);
+  assert.match(text, /Portals: <b>170 TON<\/b> \(\+61%\)/);
+  assert.match(text, /▸ MRKT: <b>268\.5 TON<\/b> \(\+2\.0%\)/);
+  assert.match(text, /Tonnel: —/);
+  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-15506">#15506<\/a> за <b>268\.5 TON<\/b> на MRKT — 1 ч 0 мин назад \(13\.11 05:00\)/);
+  assert.ok(text.length < 4096);
+});
+
+test('market links and keyboard', () => {
+  assert.equal(marketUrl(item({ market: 'portals', giftId: 'u-1' })), 'https://t.me/portals/market?startapp=gift_u-1');
+  assert.equal(marketUrl(item({ market: 'tonnel', giftId: '10561882' })), 'https://t.me/tonnel_network_bot/gift?startapp=10561882');
+  assert.equal(marketUrl(item({ market: 'getgems', giftId: 'EQabc' })), 'https://getgems.io/nft/EQabc');
+  const kb = alertKeyboard(item());
+  assert.equal(kb.inline_keyboard[0][0].text, 'Купить на MRKT');
+  assert.equal(kb.inline_keyboard[0][1].url, 'https://t.me/nft/ScaredCat-17114');
+});
+
+test('initData: valid signature passes, tampering / wrong token / stale data fail', () => {
+  const token = '123456:TEST-TOKEN';
+  const data = signInitData({ id: 42, first_name: 'A' }, token, Math.floor(NOW / 1000));
+  assert.deepEqual(validateInitData(data, token, 86400, NOW), { id: 42, first_name: 'A' });
+  assert.equal(validateInitData(data.replace('%22id%22%3A42', '%22id%22%3A43'), token, 86400, NOW), null);
+  assert.equal(validateInitData(data, 'other:token', 86400, NOW), null);
+  assert.equal(validateInitData(data, token, 86400, NOW + 2 * 86400_000), null);
+  assert.equal(validateInitData('', token), null);
+  assert.equal(validateInitData('hash=zz', token), null);
+});
+
+test('util: formatting and rate gate', async () => {
+  assert.equal(fmtTon(273.97), '273.97');
+  assert.equal(fmtTon(148), '148');
+  assert.equal(fmtTon(4.2), '4.2');
+  assert.equal(fmtTon(null), '—');
+  assert.equal(norm('Durov’s Cap'), "durov's cap");
+  assert.equal(timeAgo(NOW - 45_000, NOW), '45 сек назад');
+  const gate = new RateGate(60);
+  const t0 = Date.now();
+  await Promise.all([gate.take(), gate.take(), gate.take()]);
+  assert.ok(Date.now() - t0 >= 110, 'three slots need at least two gaps');
+});

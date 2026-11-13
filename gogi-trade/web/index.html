@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Gogi Trade</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="top">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="32" height="32"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><path d="M17.8 5.5 9 17.6h6.1l-1.7 8.9 9.6-12.6h-6.3z" fill="#0b0e14"/></svg>
+        </div>
+        <div>
+          <div class="brand-name">Gogi Trade</div>
+          <div class="brand-sub" id="live">подключение…</div>
+        </div>
+      </div>
+      <label class="switch big" title="Уведомления">
+        <input type="checkbox" id="master">
+        <span></span>
+      </label>
+    </header>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="block">
+      <div class="block-title">Маркеты</div>
+      <div class="markets" id="markets"></div>
+      <label class="row-toggle">
+        <span><b>Снижение цены</b><small>Сообщать, когда уже выставленный лот подешевел</small></span>
+        <span class="switch"><input type="checkbox" id="drops"><span></span></span>
+      </label>
+      <label class="row-toggle" id="dropRow">
+        <span><b>Минимальное снижение</b><small>Мелкие колебания цены игнорируются</small></span>
+        <span class="mini"><input type="number" id="dropPct" inputmode="decimal" min="0" max="100" step="0.5"><i>%</i></span>
+      </label>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <div class="block-title">Мои фильтры</div>
+        <button class="link" id="addTop">+ Коллекция</button>
+      </div>
+      <div id="rules" class="rules"></div>
+      <button class="cta" id="add">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        Добавить коллекцию
+      </button>
+    </section>
+
+    <section class="block foot">
+      <button class="ghost" id="test">Прислать тестовое уведомление</button>
+      <p class="hint">Одна коллекция проверяется раз в секунду на каждом маркете. Чем больше коллекций включено, тем длиннее круг опроса. Бот видит 50 самых дешёвых лотов, подходящих под фильтр.</p>
+    </section>
+  </div>
+
+  <div class="sheet" id="picker" hidden>
+    <div class="sheet-head">
+      <button class="icon" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+      <div class="sheet-title">Коллекции</div>
+      <span class="sheet-count" id="pickerCount"></span>
+    </div>
+    <div class="search"><input id="pickerSearch" type="search" placeholder="Поиск коллекции" autocomplete="off"></div>
+    <div class="grid" id="pickerGrid"></div>
+  </div>
+
+  <div class="sheet" id="editor" hidden>
+    <div class="sheet-head">
+      <button class="icon" data-close aria-label="Назад"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+      <img class="sheet-img" id="edImg" alt="">
+      <div class="sheet-title" id="edTitle"></div>
+      <button class="icon danger" id="edDelete" aria-label="Удалить"><svg viewBox="0 0 24 24" width="19" height="19"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+    </div>
+    <div class="floors" id="edFloors"></div>
+    <div class="tabs" id="edTabs"></div>
+    <div class="search" id="edSearchWrap">
+      <input id="edSearch" type="search" placeholder="Поиск" autocomplete="off">
+      <button class="chip" id="edClear">Сбросить</button>
+    </div>
+    <div class="list" id="edList"></div>
+    <div class="price" id="edPrice" hidden>
+      <label class="field">
+        <span>Максимальная цена, TON</span>
+        <input id="edMax" type="number" inputmode="decimal" min="0" step="0.01" placeholder="без ограничения">
+      </label>
+      <label class="field">
+        <span>Не дороже флора модели на, %</span>
+        <input id="edPct" type="number" inputmode="decimal" step="1" placeholder="без ограничения">
+      </label>
+      <div class="presets" id="edPresets"></div>
+      <p class="hint">Флор модели берётся самый низкий среди четырёх маркетов. Например, <b>−5</b> — только лоты минимум на 5% дешевле флора, <b>10</b> — не дороже флора более чем на 10%.</p>
+    </div>
+    <div class="sheet-foot"><button class="cta" data-close>Готово</button></div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

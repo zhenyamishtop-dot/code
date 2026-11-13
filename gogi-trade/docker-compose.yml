@@ -1,0 +1,37 @@
+# Gogi Trade + Caddy (автоматический HTTPS от Let's Encrypt).
+# Перед запуском заполните .env (см. .env.example) и задайте DOMAIN — см. README.
+services:
+  gogi:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      PORT: "8080"
+    volumes:
+      - gogi-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Укажите DOMAIN в .env, например 203-0-113-10.sslip.io}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - gogi
+
+volumes:
+  gogi-data:
+  caddy-data:
+  caddy-config:
