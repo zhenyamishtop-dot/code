@@ -60,3 +60,13 @@ node tools/ui-preview.mjs <telegramId>     # прогон мини-прилож�
 ```
 
 Структура: `src/poller.js` — опрос и поиск новых лотов, `src/notifier.js` — текст уведомления, `src/floors.js` — кэш флоров, `src/filters.js` — фильтры, `src/bot.js` — команды, `src/server.js` — API мини-приложения, `web/` — мини-приложение.
+
+## Запуск на своём компьютере (Windows, бесплатно)
+
+В PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/zhenyamishtop-dot/code/claude/casemint-model-gifts/gogi-trade/windows/install.ps1 | iex
+```
+
+Установщик ставит Node.js (если его нет), скачивает Gogi Trade в `%USERPROFILE%\GogiTrade`, спрашивает токен бота и ключ Gift Satellite и создаёт ярлык «Gogi Trade» на рабочем столе. Ярлык поднимает бесплатный туннель Cloudflare (публичный HTTPS-адрес для мини-приложения, меняется при каждом запуске) и запускает бота. Бот работает, пока открыто его окно и компьютер не спит.
