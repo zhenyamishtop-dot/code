@@ -16,7 +16,7 @@ export function defaultSettings() {
 export class Store {
   constructor(file = path.join(config.dataDir, 'state.json')) {
     this.file = file;
-    this.state = { ownerId: config.ownerId || '', users: {} };
+    this.state = { ownerId: config.ownerId || '', allowed: [], pending: {}, users: {} };
     if (fs.existsSync(file)) {
       try { this.state = { ...this.state, ...JSON.parse(fs.readFileSync(file, 'utf8')) }; } catch (e) { console.error('state.json повреждён, начинаю с пустого:', e.message); }
     }
@@ -49,7 +49,34 @@ export class Store {
     return this.state.ownerId === String(id);
   }
 
-  isAllowed(id) { return !!this.state.ownerId && this.state.ownerId === String(id); }
+  isOwner(id) { return !!this.state.ownerId && this.state.ownerId === String(id); }
+  isAllowed(id) { return this.isOwner(id) || (this.state.allowed || []).includes(String(id)); }
+
+  /** Friends the owner let in. */
+  allow(id, name = '') {
+    id = String(id);
+    this.state.allowed = [...new Set([...(this.state.allowed || []), id])];
+    (this.state.names ||= {})[id] = name || this.state.pending?.[id] || this.state.names?.[id] || '';
+    delete (this.state.pending ||= {})[id];
+    this.save();
+  }
+  deny(id) {
+    id = String(id);
+    this.state.allowed = (this.state.allowed || []).filter(x => x !== id);
+    delete (this.state.pending ||= {})[id];
+    if (this.state.users[id]) this.state.users[id].settings.enabled = false;
+    this.save();
+  }
+  /** Returns true the first time a stranger asks for access. */
+  requestAccess(id, name) {
+    id = String(id);
+    this.state.pending ||= {};
+    if (id in this.state.pending) return false;
+    this.state.pending[id] = name;
+    this.save();
+    return true;
+  }
+  friends() { return (this.state.allowed || []).map(id => ({ id, name: this.state.names?.[id] || '' })); }
 
   user(id) {
     id = String(id);

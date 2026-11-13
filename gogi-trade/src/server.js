@@ -42,7 +42,7 @@ export function createServer({ store, catalog, floors, poller, notifier, bot }) 
   async function api(req, res, url) {
     const user = validateInitData(req.headers['x-init-data']);
     if (!user?.id) return json(res, 401, { error: 'Откройте приложение из Telegram-бота' });
-    if (!store.isAllowed(user.id)) return json(res, 403, { error: 'Нет доступа. Сначала нажмите /start в боте.' });
+    if (!store.isAllowed(user.id)) return json(res, 403, { error: 'Нет доступа. Напишите боту /start — владелец получит запрос.' });
     const route = req.method + ' ' + url.pathname;
 
     if (route === 'GET /api/bootstrap') {
@@ -51,6 +51,7 @@ export function createServer({ store, catalog, floors, poller, notifier, bot }) 
         settings: store.user(user.id).settings,
         collections: catalog.collections.map(c => c.name),
         collectionFloors: floors.collectionFloorsAll(),
+        volumes: floors.volumes.map,
         backdropColors: catalog.data.backdropColors,
         markets: MARKETS.map(id => ({ id, title: MARKET_TITLES[id] })),
         status: status(user.id),

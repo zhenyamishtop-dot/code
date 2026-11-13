@@ -12,6 +12,7 @@ const COMMANDS = [
   { command: 'pause', description: 'Поставить уведомления на паузу' },
   { command: 'resume', description: 'Включить уведомления' },
   { command: 'test', description: 'Прислать тестовое уведомление' },
+  { command: 'users', description: 'Кому открыт доступ (для владельца)' },
 ];
 
 export class Bot {
@@ -101,7 +102,14 @@ export class Bot {
     this.store.claimOwner(from.id);
     if (!this.store.isAllowed(from.id)) {
       if (cb) await this.tg.call('answerCallbackQuery', { callback_query_id: cb.id }).catch(() => {});
-      return this.tg.send(chatId, 'Это приватный бот. Доступ есть только у владельца.');
+      const name = [from.first_name, from.last_name].filter(Boolean).join(' ') + (from.username ? ` (@${from.username})` : '');
+      if (this.store.requestAccess(from.id, name)) {
+        await this.tg.send(this.store.ownerId, `🔔 <b>Запрос доступа</b>\n${h(name)}\nID: <code>${from.id}</code>`, {
+          reply_markup: { inline_keyboard: [[{ text: '✅ Разрешить', callback_data: `allow:${from.id}` }, { text: '🚫 Отклонить', callback_data: `deny:${from.id}` }]] },
+        }).catch(e => console.error('access request:', e.message));
+        return this.tg.send(chatId, 'Это приватный бот. Я отправил владельцу запрос на доступ — напишу, когда он ответит.');
+      }
+      return this.tg.send(chatId, 'Запрос уже у владельца. Как только он разрешит доступ, я напишу.');
     }
     const user = this.store.user(from.id);
     if (String(user.chatId) !== String(chatId)) { user.chatId = String(chatId); this.store.save(); }
@@ -113,6 +121,29 @@ export class Bot {
       const m = msg.text.match(/^\/([a-z_]+)(?:@\w+)?\s*([\s\S]*)$/i);
       if (m) { cmd = m[1].toLowerCase(); arg = m[2].trim(); }
     } else return;
+
+    // owner-only access management
+    const access = cmd.match(/^(allow|deny)(?::(\d+))?$/);
+    if (access || cmd === 'users') {
+      if (!this.store.isOwner(from.id)) return this.tg.send(chatId, 'Эта команда доступна только владельцу.');
+      if (cmd === 'users') {
+        const fr = this.store.friends();
+        return this.tg.send(chatId, fr.length
+          ? '<b>Доступ открыт:</b>\n' + fr.map(f => `• ${h(f.name || 'без имени')} — <code>${f.id}</code>`).join('\n') + '\n\nЗакрыть доступ: <code>/deny ID</code>'
+          : 'Доступ есть только у вас. Пусть друг напишет боту /start — вам придёт запрос с кнопкой «Разрешить».');
+      }
+      const id = access[2] || arg.replace(/\D/g, '');
+      if (!id) return this.tg.send(chatId, `Укажите ID: <code>/${access[1]} 123456789</code>`);
+      if (access[1] === 'allow') {
+        this.store.allow(id);
+        this.store.user(id);
+        await this.tg.send(id, '✅ Владелец открыл вам доступ к Gogi Trade. Нажмите /start.').catch(() => {});
+        return this.tg.send(chatId, `✅ Доступ открыт для <code>${id}</code>.`);
+      }
+      this.store.deny(id);
+      await this.tg.send(id, 'Владелец закрыл доступ к Gogi Trade.').catch(() => {});
+      return this.tg.send(chatId, `🚫 Доступ закрыт для <code>${id}</code>.`);
+    }
 
     switch (cmd) {
       case 'start':

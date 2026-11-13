@@ -78,6 +78,9 @@ export class Satellite {
     return r?.content || [];
   }
 
+  /** Hourly sales volume per collection over the last 24h, all markets together. */
+  volumes24h() { return this.request('floors', '/history/collections?period=24h', { timeoutMs: 15000 }); }
+
   collections() { return this.request('gift', '/gift/collections?premarket=0'); }
   collection(name) { return this.request('gift', `/gift/collection/${encodeURIComponent(name)}`); }
 }

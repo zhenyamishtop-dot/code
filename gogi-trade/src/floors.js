@@ -4,6 +4,7 @@ import { norm, sleep, withTimeout } from './util.js';
 
 const MODEL_TTL_MS = 45_000;
 const COLL_TTL_MS = 30_000;
+const VOLUME_TTL_MS = 5 * 60_000;
 
 export class Floors {
   constructor(sat) {
@@ -11,6 +12,7 @@ export class Floors {
     this.coll = {};   // market -> { at, map: normCollection -> price }
     this.model = {};  // normCollection -> market -> { at, map: normModel -> price }
     this.inflight = new Map();
+    this.volumes = { at: 0, map: {} }; // normCollection -> { volume, sales } for the last 24h
     this.watched = () => [];
     this.running = false;
   }
@@ -34,6 +36,17 @@ export class Floors {
       }).finally(() => this.inflight.delete(key)));
     }
     return this.inflight.get(key);
+  }
+
+  async refreshVolumes() {
+    const data = await this.sat.volumes24h();
+    const map = {};
+    for (const c of data || []) {
+      let volume = 0, sales = 0;
+      for (const v of c.values || []) { volume += Number(v.volume) || 0; sales += Number(v.quantity) || 0; }
+      map[norm(c.collectionName)] = { volume: Math.round(volume * 100) / 100, sales };
+    }
+    this.volumes = { at: Date.now(), map };
   }
 
   /** Live update from a search batch: the cheapest listing of a collection on a market. */
@@ -76,6 +89,7 @@ export class Floors {
     while (this.running) {
       let did = false;
       try {
+        if (Date.now() - this.volumes.at > VOLUME_TTL_MS) { this.volumes.at = Date.now() - VOLUME_TTL_MS + 30_000; await this.refreshVolumes(); did = true; }
         for (const m of MARKETS) {
           if (Date.now() - (this.coll[m]?.at || 0) > COLL_TTL_MS) { await this.refreshCollections(m); did = true; }
         }
