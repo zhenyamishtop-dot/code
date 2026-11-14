@@ -1,6 +1,6 @@
 // Gift Satellite API client (official "API access" keys, header `Authorization: Token <key>`).
 // Several keys are supported: every key has its own rate limits, search load is split between them.
-import { config, MARKETS } from './config.js';
+import { config, MARKETS, SEARCH_PATH } from './config.js';
 import { RateGate, sleep } from './util.js';
 
 export class Satellite {
@@ -69,8 +69,15 @@ export class Satellite {
         if (res.status >= 500 && attempt < retries) { await sleep(700 * (attempt + 1)); continue; }
         throw err;
       }
+      let data;
+      try { data = await res.json(); } catch (e) {
+        // the API sometimes answers 200 with an empty body (seen on the Telegram market); retry when allowed
+        this.stats.errors++; ks.errors++; this.stats.lastError = ks.lastError = `${path}: empty or broken response (${e.message})`;
+        if (attempt >= retries) throw new Error('bad JSON: ' + path);
+        continue;
+      }
       this.stats.ok++; ks.ok++; this.stats.lastOkAt = Date.now();
-      return res.json();
+      return data;
     }
   }
 
@@ -78,7 +85,7 @@ export class Satellite {
   /** `key` pins a key (poller); omitted = next working key (one-off lookups such as alert enrichment). */
   search(market, collection, { models = [], backdrops = [], symbols = [] } = {}, key = this.nextKey()) {
     const q = new URLSearchParams({ models: models.join(','), backdrops: backdrops.join(','), symbols: symbols.join(','), starsOnly: 'false' });
-    return this.request('search:' + market, `/search/${market}/${encodeURIComponent(collection)}?${q}`, { retries: 0, key });
+    return this.request('search:' + market, `/search/${SEARCH_PATH[market] || market}/${encodeURIComponent(collection)}?${q}`, { retries: 0, key });
   }
 
   /** { modelName: floorTon } for a collection on one market. */

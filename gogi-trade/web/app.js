@@ -262,7 +262,7 @@
     const r = state.settings.rules[state.editing];
     if (!r) return;
     const d = state.details[norm(r.collection)];
-    $('edFloors').replaceChildren(...state.markets.map(m => el('div', { class: 'floor' }, el('span', {}, m.title), el('b', {}, ton(state.collectionFloors[m.id]?.[norm(r.collection)])))));
+    $('edFloors').replaceChildren(...state.markets.map(m => el('div', { class: 'floor' }, el('span', {}, m.id === 'telegram' ? 'TG' : m.title), el('b', {}, ton(state.collectionFloors[m.id]?.[norm(r.collection)])))));
     renderTabs(r);
     const isPrice = state.tab === 'price';
     $('edPrice').hidden = !isPrice; $('edList').hidden = isPrice; $('edSearchWrap').hidden = isPrice;

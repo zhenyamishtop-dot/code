@@ -17,20 +17,28 @@ export function listingTime(item) {
  */
 export function diffListings(state, items, { now = Date.now(), freshWindowMs = config.freshWindowSec * 1000 } = {}) {
   const events = [];
+  // Price window of the previous batch: results are the N cheapest lots, so a lot that only
+  // slid into the window after others sold shows up at its upper edge.
+  const prevCutoff = state.full ? state.maxPrice : Infinity;
   for (const item of items) {
     const key = String(item.giftId || item.slug || item._id);
     const price = Number(item.normalizedPrice);
     const prev = state.seen.get(key);
     if (!prev) {
-      // Unseen item: a real new listing only if it was created recently —
-      // otherwise it merely slid into the 50-cheapest window after others sold.
-      if (state.baselined && now - listingTime(item) <= freshWindowMs) events.push({ type: 'listing', item });
+      const at = listingTime(item);
+      // With a listing time (Portals, MRKT, Tonnel, Getgems): new only if created recently.
+      // Without one (Telegram market): new if it appeared strictly inside the previous price window.
+      const isNew = at ? now - at <= freshWindowMs : price < prevCutoff;
+      if (state.baselined && isNew) events.push({ type: 'listing', item });
     } else if (price < prev.price - 1e-9) {
       events.push({ type: 'price_drop', item, oldPrice: prev.price });
     }
     state.seen.set(key, { price, at: now });
   }
   state.baselined = true;
+  const prices = items.map(i => Number(i.normalizedPrice)).filter(p => p > 0);
+  state.maxPrice = prices.length ? Math.max(...prices) : 0;
+  state.full = items.length >= (state.pageSize || 50);
   // forget items that left the window long ago
   if (state.seen.size > 400) for (const [k, v] of state.seen) if (now - v.at > 3600_000) state.seen.delete(k);
   return events;
@@ -89,13 +97,14 @@ export class Poller extends EventEmitter {
   process(market, target, items) {
     const key = market + '|' + target.key;
     let state = this.states.get(key);
-    if (!state) { state = { baselined: false, seen: new Map(), touched: 0 }; this.states.set(key, state); }
+    if (!state) { state = { baselined: false, seen: new Map(), touched: 0, pageSize: market === 'telegram' ? 100 : 50 }; this.states.set(key, state); }
     // a target that was not polled for a while starts from a fresh baseline
     if (state.touched && Date.now() - state.touched > STATE_TTL_MS) { state.baselined = false; state.seen.clear(); }
     state.touched = Date.now();
 
     const unfiltered = !target.query.models.length && !target.query.backdrops.length && !target.query.symbols.length;
-    if (unfiltered && items.length) {
+    // the Telegram market search sees fewer lots than its floor statistics, so it does not update floors
+    if (unfiltered && items.length && market !== 'telegram') {
       this.floors.observeCollectionFloor(market, target.collection, Math.min(...items.map(i => Number(i.normalizedPrice)).filter(p => p > 0)));
     }
     if (process.env.DEBUG_POLL && state.baselined) {

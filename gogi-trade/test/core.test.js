@@ -57,7 +57,7 @@ test('sanitizeSettings: drops junk, dedupes, validates numbers and unknown colle
       { nope: 1 },
     ],
   }, new Set(['scared cat']));
-  assert.deepEqual(s.markets, { portals: true, mrkt: true, tonnel: false, getgems: true });
+  assert.deepEqual(s.markets, { portals: true, mrkt: true, tonnel: false, getgems: true, telegram: true });
   assert.equal(s.rules.length, 1);
   assert.deepEqual(s.rules[0], { collection: 'Scared Cat', enabled: true, models: ['Purrlion'], backdrops: [], symbols: [], maxPrice: 300, maxOverFloorPct: null });
 });
@@ -87,7 +87,7 @@ test('buildTargets: API query only narrows when every rule narrows', () => {
   assert.deepEqual(t, []);
   t = buildTargets([{ settings: sanitizeSettings({ markets: { tonnel: false }, rules: [{ collection: 'Toy Bear' }, { collection: 'Lol Pop', enabled: false }] }) }]);
   assert.deepEqual(t.map(x => x.collection), ['Toy Bear']);
-  assert.deepEqual(t[0].markets, ['portals', 'mrkt', 'getgems']);
+  assert.deepEqual(t[0].markets, ['portals', 'mrkt', 'getgems', 'telegram']);
 });
 
 test('formatAlert: contains listing, floors for 4 markets, sales with links; escapes HTML', () => {
@@ -217,4 +217,21 @@ test('backdrop floors exclude the alerted gift itself', async () => {
   assert.equal(r.modelBackdropFloor.slug, 'ToyBear-3');
   const alone = await n.attrFloors({ slug: 'ToyBear-9', collectionName: 'Toy Bear', modelName: 'Peanut', backdropName: 'Black' });
   assert.equal(alone.modelBackdropFloor.slug, 'ToyBear-2');
+});
+
+test('telegram market: no listing time, new lots detected inside the previous price window', () => {
+  const lot = (slug, price) => ({ slug, giftId: slug, market: 'telegram', normalizedPrice: price, collectionName: 'Lol Pop', modelName: 'M', backdropName: 'B', symbolName: 'S' });
+  const state = { baselined: false, seen: new Map(), pageSize: 3 };
+  diffListings(state, [lot('a', 5), lot('b', 6), lot('c', 7)], { now: NOW });
+  // 'd' is cheaper than the old window edge -> new listing; 'e' sits at/after the edge -> slid in after a sale
+  const ev = diffListings(state, [lot('a', 5), lot('d', 5.5), lot('e', 7.2)], { now: NOW + 1000 });
+  assert.deepEqual(ev.map(e => [e.type, e.item.slug]), [['listing', 'd']]);
+  // when the window was not full, every unseen lot is new
+  const st2 = { baselined: false, seen: new Map(), pageSize: 100 };
+  diffListings(st2, [lot('x', 9)], { now: NOW });
+  assert.equal(diffListings(st2, [lot('x', 9), lot('y', 50)], { now: NOW + 1000 }).length, 1);
+  assert.equal(marketUrl({ market: 'telegram', slug: 'LolPop-1', link: 'https://t.me/nft/LolPop-1' }), 'https://t.me/nft/LolPop-1');
+  const tgText = formatAlert({ type: 'listing', item: { ...lot('SnakeBox-126488', 6.48), number: undefined, collectionName: 'Snake Box' }, modelFloors: {}, sales: [] }, NOW);
+  assert.match(tgText, /Snake Box #126488/);
+  assert.match(tgText, /🟧 <b>ЛИСТИНГ<\/b> · <b>TELEGRAM<\/b>/);
 });

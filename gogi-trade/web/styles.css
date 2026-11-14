@@ -132,6 +132,7 @@ img.fade.in { opacity: 1; }
 .market.on .check { border: 0; background: var(--grad); transform: scale(1.06); }
 .market.on .check::after, .item.on .box::after, .tile.added .tick::after { content: ""; width: 9px; height: 5px; border-left: 2.2px solid var(--ink); border-bottom: 2.2px solid var(--ink); transform: rotate(-45deg) translate(1px, -1px); }
 .market:not(.on) { opacity: .6; }
+.markets .market:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 .row-toggle { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .row-toggle b { display: block; font-size: 14.5px; font-weight: 700; }
@@ -214,10 +215,10 @@ img.fade.in { opacity: 1; }
 .tile.added .tick { border-color: transparent; background: var(--grad); transform: scale(1.12); box-shadow: 0 0 12px rgba(255, 106, 0, .6); }
 
 /* editor */
-.floors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0 14px 10px; }
-.floor { background: var(--panel-2); border: 1px solid var(--line); border-radius: 13px; padding: 8px 9px; min-width: 0; }
-.floor span { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .09em; font-weight: 800; }
-.floor b { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--or-2); }
+.floors { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; padding: 0 14px 10px; }
+.floor { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 7px 7px; min-width: 0; }
+.floor span { display: block; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.floor b { display: block; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--or-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tabs { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 0 14px 10px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 15px; }
 .tab { padding: 8px 2px; border-radius: 11px; font-size: 13px; font-weight: 800; color: var(--muted); transition: background .25s, color .2s, transform .16s, box-shadow .25s; }
 .tab small { display: block; font-size: 10.5px; font-weight: 700; color: var(--dim); }

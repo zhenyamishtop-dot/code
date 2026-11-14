@@ -4,6 +4,8 @@ import { matchListing } from './filters.js';
 import { escapeHtml as h, fmtTon, fmtMsk, timeAgo, norm, withTimeout } from './util.js';
 
 export const nftUrl = slug => `https://t.me/nft/${slug}`;
+/** Gift number; the Telegram market rows have none, so it is taken from the slug ("SnakeBox-126488"). */
+export const giftNumber = item => item.number ?? (String(item.slug || '').match(/-(\d+)$/) || [])[1] ?? '?';
 
 /** Deep link that opens the listing inside the market. */
 export function marketUrl(item) {
@@ -13,6 +15,7 @@ export function marketUrl(item) {
     case 'mrkt': return `https://t.me/mrkt/app?startapp=${id}`;
     case 'tonnel': return `https://t.me/tonnel_network_bot/gift?startapp=${id}`;
     case 'getgems': return `https://getgems.io/nft/${id}`;
+    case 'telegram': return item.link || nftUrl(item.slug); // the gift page has the Buy button
     default: return nftUrl(item.slug);
   }
 }
@@ -69,7 +72,7 @@ export function formatAlert(ctx, now = Date.now()) {
   const minFloor = known.length ? Math.min(...known) : null;
   const lines = [
     `${head} · <b>${h(market).toUpperCase()}</b>`,
-    `<a href="${nftUrl(item.slug)}"><b>${h(item.collectionName)} #${item.number}</b></a>`,
+    `<a href="${nftUrl(item.slug)}"><b>${h(item.collectionName)} #${giftNumber(item)}</b></a>`,
     `💰 <b>${fmtTon(price)} TON</b>` +
       (ctx.type === 'price_drop' && ctx.oldPrice ? ` <s>${fmtTon(ctx.oldPrice)}</s> <b>−${((1 - price / ctx.oldPrice) * 100).toFixed(1)}%</b>` : '') +
       ` на <a href="${marketUrl(item)}">${h(market)}</a>`,

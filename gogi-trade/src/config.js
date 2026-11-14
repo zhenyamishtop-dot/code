@@ -15,8 +15,10 @@ function loadEnvFile(file) {
 }
 loadEnvFile(path.join(ROOT, '.env'));
 
-export const MARKETS = ['portals', 'mrkt', 'tonnel', 'getgems'];
-export const MARKET_TITLES = { portals: 'Portals', mrkt: 'MRKT', tonnel: 'Tonnel', getgems: 'Getgems' };
+export const MARKETS = ['portals', 'mrkt', 'tonnel', 'getgems', 'telegram'];
+export const MARKET_TITLES = { portals: 'Portals', mrkt: 'MRKT', tonnel: 'Tonnel', getgems: 'Getgems', telegram: 'Telegram' };
+/** Gift Satellite names the Telegram market `tg` in search URLs and `telegram` everywhere else. */
+export const SEARCH_PATH = { telegram: 'tg' };
 
 export const config = {
   botToken: process.env.BOT_TOKEN || '',
