@@ -52,16 +52,40 @@ if (-not (Test-Path $cf)) {
 
 # 4. Secrets -> .env (stored only on this computer)
 $envFile = Join-Path $target '.env'
+
+function Read-SatelliteKeys {
+  Write-Host 'Paste Gift Satellite API keys (Profile -> API access), one per line.' -ForegroundColor Cyan
+  Write-Host 'Each key polls its own share of collections. Press Enter on an empty line to finish.' -ForegroundColor Cyan
+  $keys = @()
+  while ($true) {
+    $k = (Read-Host ('Key ' + ($keys.Count + 1))).Trim()
+    if (-not $k) { if ($keys.Count) { break } else { continue } }
+    if ($k -notmatch '^[A-Za-z0-9]{20,}$') { Write-Host 'This does not look like a key, try again.' -ForegroundColor Yellow; continue }
+    if ($keys -contains $k) { Write-Host 'Already added.' -ForegroundColor Yellow; continue }
+    $keys += $k
+  }
+  return ($keys -join ',')
+}
+
 if (-not (Test-Path $envFile)) {
   Write-Host ''
   Write-Host 'Paste the bot token (chat with @BotFather, message about gogi_trade_bot):' -ForegroundColor Cyan
   $bot = (Read-Host 'BOT_TOKEN').Trim()
-  Write-Host 'Paste the Gift Satellite API key (Gift Satellite -> Profile -> API access):' -ForegroundColor Cyan
-  $sat = (Read-Host 'SATELLITE_TOKEN').Trim()
-  $lines = @("BOT_TOKEN=$bot", "SATELLITE_TOKEN=$sat", 'WEBAPP_URL=', 'PORT=8080', 'OWNER_ID=', 'FRESH_WINDOW_SEC=600', 'DATA_DIR=./data')
+  $sat = Read-SatelliteKeys
+  $lines = @("BOT_TOKEN=$bot", "SATELLITE_TOKENS=$sat", 'WEBAPP_URL=', 'PORT=8080', 'OWNER_ID=', 'FRESH_WINDOW_SEC=600', 'DATA_DIR=./data')
   [IO.File]::WriteAllLines($envFile, $lines)
 } else {
-  Write-Host '.env already exists, keeping it.'
+  Write-Host '.env already exists, keeping the bot token.'
+  $old = Get-Content $envFile
+  $current = ($old | Where-Object { $_ -match '^SATELLITE_TOKENS?=' } | ForEach-Object { ($_ -split '=', 2)[1] }) -join ',' -split '[,; ]+' | Where-Object { $_ }
+  Write-Host ('Gift Satellite keys now: ' + @($current).Count) -ForegroundColor Cyan
+  $ans = (Read-Host 'Replace the keys? (y/N)').Trim()
+  if ($ans -match '^(y|yes|д|да)$') {
+    $sat = Read-SatelliteKeys
+    $kept = $old | Where-Object { $_ -notmatch '^SATELLITE_TOKENS?=' }
+    [IO.File]::WriteAllLines($envFile, @($kept) + "SATELLITE_TOKENS=$sat")
+    Write-Host 'Keys saved.' -ForegroundColor Green
+  }
 }
 
 # 5. Desktop shortcut

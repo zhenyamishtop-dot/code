@@ -140,3 +140,39 @@ test('util: formatting and rate gate', async () => {
   await Promise.all([gate.take(), gate.take(), gate.take()]);
   assert.ok(Date.now() - t0 >= 110, 'three slots need at least two gaps');
 });
+
+test('multiple keys: search load is split between keys, each key has its own rate gate', async () => {
+  const { Satellite } = await import('../src/satellite.js');
+  const { Poller } = await import('../src/poller.js');
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push({ at: Date.now(), key: opts.headers.Authorization, url });
+    return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const sat = new Satellite({ tokens: ['k1', 'k2', 'k3'], base: 'http://x', fetchImpl });
+  assert.equal(sat.keyCount, 3);
+  const targets = ['A', 'B', 'C', 'D', 'E', 'F'].map(c => ({ collection: c, markets: ['portals'], query: { models: [], backdrops: [], symbols: [] }, key: c }));
+  const poller = new Poller(sat, { observeCollectionFloor() {} }, () => targets);
+  // every collection belongs to exactly one key
+  const parts = [0, 1, 2].map(k => poller.assigned('portals', k).map(t => t.collection));
+  assert.deepEqual(parts.flat().sort(), ['A', 'B', 'C', 'D', 'E', 'F']);
+  assert.ok(parts.every(p => p.length === 2));
+  assert.ok(Math.abs(poller.cycleSeconds() - 2 * 1.05) < 1e-9);
+  // three keys can each search the same market in the same second
+  const t0 = Date.now();
+  await Promise.all([0, 1, 2].map(k => sat.search('portals', 'A', {}, k)));
+  assert.ok(Date.now() - t0 < 500, 'keys must not wait for each other');
+  assert.deepEqual(calls.map(c => c.key).sort(), ['Token k1', 'Token k2', 'Token k3']);
+  // a rejected key is disabled and its collections move to the others
+  sat.keyStats[1].disabled = true;
+  assert.deepEqual(poller.assigned('portals', 1), []);
+  assert.deepEqual([0, 2].map(k => poller.assigned('portals', k).length), [3, 3]);
+  assert.ok(Math.abs(poller.cycleSeconds() - 3 * 1.05) < 1e-9);
+});
+
+test('config: keys from SATELLITE_TOKENS and SATELLITE_TOKEN are merged and deduped', async () => {
+  process.env.SATELLITE_TOKENS = 'aaa, bbb;ccc';
+  process.env.SATELLITE_TOKEN = 'bbb';
+  const { config } = await import('../src/config.js?keys');
+  assert.deepEqual(config.satelliteTokens, ['aaa', 'bbb', 'ccc']);
+});

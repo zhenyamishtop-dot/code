@@ -20,7 +20,8 @@ export const MARKET_TITLES = { portals: 'Portals', mrkt: 'MRKT', tonnel: 'Tonnel
 
 export const config = {
   botToken: process.env.BOT_TOKEN || '',
-  satelliteToken: process.env.SATELLITE_TOKEN || '',
+  // One or more Gift Satellite keys: SATELLITE_TOKENS=key1,key2,... (SATELLITE_TOKEN is still accepted)
+  satelliteTokens: [...new Set(`${process.env.SATELLITE_TOKENS || ''},${process.env.SATELLITE_TOKEN || ''}`.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean))],
   satelliteBase: process.env.SATELLITE_BASE || 'https://gift-satellite.dev/api',
   webappUrl: (process.env.WEBAPP_URL || '').replace(/\/+$/, ''),
   port: Number(process.env.PORT || 8080),
@@ -34,7 +35,7 @@ export const config = {
 export function assertConfig() {
   const missing = [];
   if (!config.botToken) missing.push('BOT_TOKEN');
-  if (!config.satelliteToken) missing.push('SATELLITE_TOKEN');
+  if (!config.satelliteTokens.length) missing.push('SATELLITE_TOKENS');
   if (missing.length) {
     console.error('Не заданы переменные: ' + missing.join(', ') + '. Скопируйте .env.example в .env и заполните.');
     process.exit(1);

@@ -76,12 +76,14 @@
   const volText = name => { const v = vol(name); return v ? `24ч: ${compact(v.volume)} TON · ${v.sales} прод.` : '24ч: нет продаж'; };
   const ruleOf = name => state.settings.rules.find(r => norm(r.collection) === norm(name));
   const activeCount = () => state.settings.rules.filter(r => r.enabled !== false).length;
+  // every Gift Satellite key polls its share of collections in parallel (1 req/s per market each)
+  const cycleFor = n => Math.max(1, Math.round(Math.ceil(n / Math.max(1, state.status?.keys || 1)) * 1.05));
 
   // ---- main screen ----
   function renderHeader() {
     const s = state.settings, st = state.status;
     const active = activeCount();
-    const cycle = Math.max(1, Math.round(active * 1.05));
+    const cycle = cycleFor(active);
     const live = $('live');
     live.replaceChildren();
     if (!s.enabled) live.append(el('span', { class: 'dot warn' }), 'Пауза');
@@ -174,7 +176,7 @@
     const n = state.settings.rules.length;
     const allOn = visible.length > 0 && visible.every(ruleOf);
     $('pickerToggleAll').textContent = allOn ? 'Снять все' : (visible.length === state.collections.length ? 'Выбрать все' : `Выбрать ${visible.length}`);
-    $('pickerDone').textContent = n ? `Готово · ${n} · круг ~${Math.max(1, Math.round(activeCount() * 1.05))} сек` : 'Готово';
+    $('pickerDone').textContent = n ? `Готово · ${n} · круг ~${cycleFor(activeCount())} сек` : 'Готово';
     $('pickerCount').textContent = `${visible.length} из ${state.collections.length}`;
   }
 

@@ -53,6 +53,7 @@ export class Bot {
       '',
       `Коллекций в фильтрах: <b>${active.length}</b>`,
       `Маркеты: ${MARKETS.filter(m => s.markets[m] !== false).map(m => MARKET_TITLES[m]).join(' · ') || '—'}`,
+      `Ключей Gift Satellite: <b>${this.sat.activeKeys().length}</b>` + (this.sat.activeKeys().length < this.sat.keyCount ? ` (отключено: ${this.sat.keyCount - this.sat.activeKeys().length})` : ''),
       active.length ? `Полный круг опроса: <b>~${Math.max(1, Math.round(cycle))} сек</b> на каждый маркет` : 'Добавьте коллекции — и я начну следить.',
       '',
       ...MARKETS.map(m => {

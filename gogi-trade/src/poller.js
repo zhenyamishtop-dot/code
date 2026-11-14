@@ -43,27 +43,41 @@ export class Poller extends EventEmitter {
     this.floors = floors;
     this.getTargets = getTargets;
     this.states = new Map(); // market|targetKey -> { baselined, seen, touched }
-    this.cursor = Object.fromEntries(MARKETS.map(m => [m, 0]));
+    this.cursor = {}; // market#key -> position in the assigned list
     this.stats = Object.fromEntries(MARKETS.map(m => [m, { polls: 0, errors: 0, lastPollAt: 0, lastError: null, lastMs: 0 }]));
     this.running = false;
   }
 
   start() {
     this.running = true;
-    for (const m of MARKETS) this.loop(m);
+    for (const m of MARKETS) for (let k = 0; k < this.sat.keyCount; k++) this.loop(m, k);
   }
   stop() { this.running = false; }
 
-  async loop(market) {
+  /**
+   * Targets polled by key slot `slot` on `market`: collections are dealt round-robin
+   * over the working keys, so N keys make the cycle N times shorter.
+   */
+  assigned(market, slot) {
+    const keys = this.sat.activeKeys();
+    const targets = this.getTargets().filter(t => t.markets.includes(market));
+    if (!keys.length) return slot === 0 ? targets : [];
+    const pos = keys.indexOf(slot);
+    if (pos < 0) return [];
+    return targets.filter((_, i) => i % keys.length === pos);
+  }
+
+  async loop(market, key) {
+    const cursorKey = market + '#' + key;
     while (this.running) {
-      const targets = this.getTargets().filter(t => t.markets.includes(market));
+      const targets = this.assigned(market, key);
       if (!targets.length) { await sleep(700); continue; }
-      const target = targets[this.cursor[market]++ % targets.length];
+      const target = targets[(this.cursor[cursorKey] = (this.cursor[cursorKey] || 0) + 1) % targets.length];
       const st = this.stats[market];
       const t0 = Date.now();
       try {
-        const items = await this.sat.search(market, target.collection, target.query);
-        st.polls++; st.lastPollAt = Date.now(); st.lastMs = this.sat.lastMs?.['search:' + market] ?? Date.now() - t0;
+        const items = await this.sat.search(market, target.collection, target.query, key);
+        st.polls++; st.lastPollAt = Date.now(); st.lastMs = this.sat.lastMs?.[`search:${market}#${key}`] ?? Date.now() - t0;
         this.process(market, target, Array.isArray(items) ? items : []);
       } catch (e) {
         st.errors++; st.lastError = e.message;
@@ -95,10 +109,11 @@ export class Poller extends EventEmitter {
     if (this.states.size > 2000) for (const [k, s] of this.states) if (Date.now() - s.touched > STATE_TTL_MS) this.states.delete(k);
   }
 
-  /** Seconds one full pass over all targets takes on the busiest market. */
+  /** Seconds one full pass over all targets takes on the busiest market (keys poll in parallel). */
   cycleSeconds() {
     const targets = this.getTargets();
-    const perMarket = MARKETS.map(m => targets.filter(t => t.markets.includes(m)).length);
+    const keys = Math.max(1, this.sat.activeKeys().length);
+    const perMarket = MARKETS.map(m => Math.ceil(targets.filter(t => t.markets.includes(m)).length / keys));
     return Math.max(0, ...perMarket) * config.searchGapMs / 1000;
   }
 }

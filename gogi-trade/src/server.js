@@ -31,6 +31,7 @@ export function createServer({ store, catalog, floors, poller, notifier, bot }) 
       enabled: s.enabled,
       activeRules: s.rules.filter(r => r.enabled !== false).length,
       cycleSeconds: poller.cycleSeconds(),
+      keys: poller.sat.activeKeys().length,
       markets: Object.fromEntries(MARKETS.map(m => [m, { lastPollAt: poller.stats[m].lastPollAt, lastMs: poller.stats[m].lastMs, polls: poller.stats[m].polls, errors: poller.stats[m].errors }])),
       alerts: notifier.stats.alerts,
       lastAlertAt: notifier.stats.lastAlertAt,
