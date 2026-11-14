@@ -29,46 +29,57 @@ export function formatSales(sales, now = Date.now()) {
   if (!sales.length) return '<i>продаж пока не было</i>';
   return sales.map(s => {
     const title = MARKET_TITLES[s.market] || (s.market === 'telegram' ? 'Telegram' : s.market);
-    return `<a href="${nftUrl(s.slug)}">#${s.number ?? s.slug.split('-').pop()}</a> за <b>${fmtTon(s.normalizedPrice)} TON</b> на ${h(title)} — ${timeAgo(s.soldAt, now)} (${fmtMsk(s.soldAt)})`;
+    return `▫️ <a href="${nftUrl(s.slug)}">#${s.number ?? s.slug.split('-').pop()}</a> · <b>${fmtTon(s.normalizedPrice)} TON</b> · ${h(title)} · ${timeAgo(s.soldAt, now)} <i>(${fmtMsk(s.soldAt)})</i>`;
   }).join('\n');
 }
 
 /**
+ * Orange "terminal" style: Telegram cannot colour text, so the palette comes from
+ * orange/black markers (🟧 🔸 🟠 ⚫️) and a fixed layout.
  * ctx: { type, item, oldPrice, modelFloors:{market:price|null}, collectionFloor, sales:Array|null, rarity:{model,backdrop,symbol} }
  */
 export function formatAlert(ctx, now = Date.now()) {
   const { item } = ctx;
   const price = Number(item.normalizedPrice);
   const market = MARKET_TITLES[item.market] || item.market;
-  const head = ctx.type === 'price_drop' ? '📉 <b>ЦЕНА СНИЖЕНА</b>' : ctx.type === 'test' ? '🧪 <b>ТЕСТ</b>' : '✅ <b>ЛИСТИНГ</b>';
-  const rar = v => (v != null ? ` <i>(${(v / 10).toFixed(1)}%)</i>` : '');
+  const head = ctx.type === 'price_drop' ? '🔻 <b>СНИЖЕНИЕ ЦЕНЫ</b>' : ctx.type === 'test' ? '🧪 <b>ТЕСТ</b>' : '🟧 <b>ЛИСТИНГ</b>';
+  const rar = v => (v != null ? ` <i>· ${(v / 10).toFixed(1)}%</i>` : '');
+  const known = MARKETS.map(m => ctx.modelFloors?.[m]).filter(v => v != null && v > 0);
+  const minFloor = known.length ? Math.min(...known) : null;
   const lines = [
-    head,
-    `<a href="${nftUrl(item.slug)}">${h(item.collectionName)} #${item.number}</a> на <a href="${marketUrl(item)}">${h(market)}</a> за <b>${fmtTon(price)} TON</b>` +
-      (ctx.type === 'price_drop' && ctx.oldPrice ? ` <s>${fmtTon(ctx.oldPrice)}</s> (−${((1 - price / ctx.oldPrice) * 100).toFixed(1)}%)` : ''),
-    `Модель: <b>${h(item.modelName)}</b>${rar(ctx.rarity?.model)}`,
-    `Фон: ${h(item.backdropName)}${rar(ctx.rarity?.backdrop)}`,
-    `Узор: ${h(item.symbolName)}${rar(ctx.rarity?.symbol)}`,
+    `${head} · <b>${h(market).toUpperCase()}</b>`,
+    `<a href="${nftUrl(item.slug)}"><b>${h(item.collectionName)} #${item.number}</b></a>`,
+    `💰 <b>${fmtTon(price)} TON</b>` +
+      (ctx.type === 'price_drop' && ctx.oldPrice ? ` <s>${fmtTon(ctx.oldPrice)}</s> <b>−${((1 - price / ctx.oldPrice) * 100).toFixed(1)}%</b>` : '') +
+      ` на <a href="${marketUrl(item)}">${h(market)}</a>`,
+  ];
+  if (minFloor != null && price < minFloor) lines.push(`🔥 <b>Ниже флора модели на ${((1 - price / minFloor) * 100).toFixed(1)}%</b>`);
+  if (item.isLocked) lines.push('🔒 Подарок с блокировкой вывода');
+  lines.push(
     '',
-    `Флор коллекции на ${h(market)}: <b>${fmtTon(ctx.collectionFloor)} TON</b>${pct(price, ctx.collectionFloor)}`,
-    'Флор модели:',
+    `🔸 Модель: <b>${h(item.modelName)}</b>${rar(ctx.rarity?.model)}`,
+    `🔸 Фон: <b>${h(item.backdropName)}</b>${rar(ctx.rarity?.backdrop)}`,
+    `🔸 Узор: <b>${h(item.symbolName)}</b>${rar(ctx.rarity?.symbol)}`,
+    '',
+    `📊 <b>ФЛОР МОДЕЛИ</b>`,
     ...MARKETS.map(m => {
       const f = ctx.modelFloors?.[m];
-      const mark = m === item.market ? '▸ ' : '   ';
-      return `${mark}${MARKET_TITLES[m]}: ${f != null ? `<b>${fmtTon(f)} TON</b>${pct(price, f)}` : '—'}`;
+      const mark = m === item.market ? '🟠' : '⚫️';
+      const best = f != null && f === minFloor ? ' ⬅️ мин' : '';
+      return `${mark} ${MARKET_TITLES[m]}: ${f != null ? `<b>${fmtTon(f)} TON</b>${pct(price, f)}${best}` : '—'}`;
     }),
+    `🟧 Флор коллекции на ${h(market)}: <b>${fmtTon(ctx.collectionFloor)} TON</b>${pct(price, ctx.collectionFloor)}`,
     '',
-    'Последние продажи модели:',
+    `🕓 <b>ПОСЛЕДНИЕ ПРОДАЖИ МОДЕЛИ</b>`,
     `<blockquote expandable>${formatSales(ctx.sales, now)}</blockquote>`,
-  ];
-  if (item.isLocked) lines.splice(5, 0, '🔒 Подарок с блокировкой вывода');
+  );
   return lines.join('\n');
 }
 
 export function alertKeyboard(item) {
   return { inline_keyboard: [[
-    { text: `Купить на ${MARKET_TITLES[item.market] || item.market}`, url: marketUrl(item) },
-    { text: 'Подарок', url: nftUrl(item.slug) },
+    { text: `🟧 Купить на ${MARKET_TITLES[item.market] || item.market}`, url: marketUrl(item) },
+    { text: '🎁 Подарок', url: nftUrl(item.slug) },
   ]] };
 }
 

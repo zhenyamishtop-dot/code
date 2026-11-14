@@ -97,14 +97,18 @@ test('formatAlert: contains listing, floors for 4 markets, sales with links; esc
     rarity: { model: 15, backdrop: 20, symbol: 4 },
     sales: [{ slug: 'ScaredCat-15506', number: 15506, market: 'mrkt', normalizedPrice: 268.5, soldAt: new Date(NOW - 3600_000).toISOString() }],
   }, NOW);
-  assert.match(text, /ЛИСТИНГ/);
-  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-17114">Scared Cat #17114<\/a> на <a href="https:\/\/t\.me\/mrkt\/app\?startapp=abc-1">MRKT<\/a> за <b>273\.97 TON<\/b>/);
+  assert.match(text, /🟧 <b>ЛИСТИНГ<\/b> · <b>MRKT<\/b>/);
+  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-17114"><b>Scared Cat #17114<\/b><\/a>/);
+  assert.match(text, /💰 <b>273\.97 TON<\/b> на <a href="https:\/\/t\.me\/mrkt\/app\?startapp=abc-1">MRKT<\/a>/);
   assert.match(text, /Purr&lt;lion&gt;/);
   assert.match(text, /Флор коллекции на MRKT: <b>148 TON<\/b>/);
-  assert.match(text, /Portals: <b>170 TON<\/b> \(\+61%\)/);
-  assert.match(text, /▸ MRKT: <b>268\.5 TON<\/b> \(\+2\.0%\)/);
+  assert.match(text, /⚫️ Portals: <b>170 TON<\/b> \(\+61%\) ⬅️ мин/);
+  assert.match(text, /🟠 MRKT: <b>268\.5 TON<\/b> \(\+2\.0%\)/);
   assert.match(text, /Tonnel: —/);
-  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-15506">#15506<\/a> за <b>268\.5 TON<\/b> на MRKT — 1 ч 0 мин назад \(13\.11 05:00\)/);
+  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-15506">#15506<\/a> · <b>268\.5 TON<\/b> · MRKT · 1 ч 0 мин назад <i>\(13\.11 05:00\)<\/i>/);
+  assert.doesNotMatch(text, /Ниже флора/);
+  const cheap = formatAlert({ type: 'listing', item: item({ normalizedPrice: 150 }), modelFloors: { portals: 170, mrkt: 200, tonnel: null, getgems: null }, collectionFloor: 148, sales: [] }, NOW);
+  assert.match(cheap, /🔥 <b>Ниже флора модели на 11\.8%<\/b>/);
   assert.ok(text.length < 4096);
 });
 
@@ -113,7 +117,7 @@ test('market links and keyboard', () => {
   assert.equal(marketUrl(item({ market: 'tonnel', giftId: '10561882' })), 'https://t.me/tonnel_network_bot/gift?startapp=10561882');
   assert.equal(marketUrl(item({ market: 'getgems', giftId: 'EQabc' })), 'https://getgems.io/nft/EQabc');
   const kb = alertKeyboard(item());
-  assert.equal(kb.inline_keyboard[0][0].text, 'Купить на MRKT');
+  assert.equal(kb.inline_keyboard[0][0].text, '🟧 Купить на MRKT');
   assert.equal(kb.inline_keyboard[0][1].url, 'https://t.me/nft/ScaredCat-17114');
 });
 
