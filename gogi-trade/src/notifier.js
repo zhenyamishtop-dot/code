@@ -29,10 +29,10 @@ const pct = (price, floor) => {
 
 /** "<b>12.5 TON</b> на <a>MRKT</a> (+3%)" for the cheapest matching lot, or a loading / empty marker. */
 export function formatAttrFloor(best, price) {
-  if (best === undefined) return '<i>загружаю…</i>';
+  if (best === undefined) return '<i>…</i>';
   if (!best) return '—';
   const title = MARKET_TITLES[best.market] || best.market;
-  return `<b>${fmtTon(best.normalizedPrice)} TON</b> на <a href="${marketUrl(best)}">${h(title)}</a>${pct(price, Number(best.normalizedPrice))}`;
+  return `<b>${fmtTon(best.normalizedPrice)}</b> <a href="${marketUrl(best)}">${h(title)}</a>${pct(price, Number(best.normalizedPrice))}`;
 }
 
 /** Cheapest lot over several markets' search results; `filter` narrows the candidates. */
@@ -48,55 +48,56 @@ export function cheapestOf(resultsByMarket, filter = () => true) {
   return best;
 }
 
+/** Short sale time: "14:05" for today (MSK), "13.11 22:41" otherwise. */
+function saleTime(date, now) {
+  const full = fmtMsk(date);
+  return full.slice(0, 5) === fmtMsk(now).slice(0, 5) ? full.slice(6) : full;
+}
+
 export function formatSales(sales, now = Date.now()) {
   if (!sales) return '<i>загружаю…</i>';
   if (!sales.length) return '<i>продаж пока не было</i>';
   return sales.map(s => {
     const title = MARKET_TITLES[s.market] || (s.market === 'telegram' ? 'Telegram' : s.market);
-    return `▫️ <a href="${nftUrl(s.slug)}">#${s.number ?? s.slug.split('-').pop()}</a> · <b>${fmtTon(s.normalizedPrice)} TON</b> · ${h(title)} · ${timeAgo(s.soldAt, now)} <i>(${fmtMsk(s.soldAt)})</i>`;
+    return `<a href="${nftUrl(s.slug)}">#${s.number ?? s.slug.split('-').pop()}</a> <b>${fmtTon(s.normalizedPrice)}</b> ${h(title)} · ${timeAgo(s.soldAt, now)} <i>${saleTime(s.soldAt, now)}</i>`;
   }).join('\n');
 }
 
 /**
- * Orange "terminal" style: Telegram cannot colour text, so the palette comes from
- * orange/black markers (🟧 🔸 🟠 ⚫️) and a fixed layout.
- * ctx: { type, item, oldPrice, modelFloors:{market:price|null}, collectionFloor, sales:Array|null, rarity:{model,backdrop,symbol} }
+ * Compact orange "terminal" layout. Telegram cannot colour text, so the palette comes from
+ * orange/black markers; per-market floors and sales are collapsible quotes.
+ * ctx: { type, item, oldPrice, modelFloors:{market:price|null}, collectionFloor, sales:Array|null,
+ *        rarity:{model,backdrop,symbol}, backdropFloor, modelBackdropFloor }
  */
 export function formatAlert(ctx, now = Date.now()) {
   const { item } = ctx;
   const price = Number(item.normalizedPrice);
   const market = MARKET_TITLES[item.market] || item.market;
-  const head = ctx.type === 'price_drop' ? '🔻 <b>СНИЖЕНИЕ ЦЕНЫ</b>' : ctx.type === 'test' ? '🧪 <b>ТЕСТ</b>' : '🟧 <b>ЛИСТИНГ</b>';
-  const rar = v => (v != null ? ` <i>· ${(v / 10).toFixed(1)}%</i>` : '');
-  const known = MARKETS.map(m => ctx.modelFloors?.[m]).filter(v => v != null && v > 0);
-  const minFloor = known.length ? Math.min(...known) : null;
+  const head = ctx.type === 'price_drop' ? '🔻 <b>СНИЖЕНИЕ</b>' : ctx.type === 'test' ? '🧪 <b>ТЕСТ</b>' : '🟧 <b>ЛИСТИНГ</b>';
+  const rar = v => (v != null ? ` <i>${(v / 10).toFixed(1)}%</i>` : '');
+  const floors = MARKETS.map(m => [m, ctx.modelFloors?.[m]]).filter(([, v]) => v != null && v > 0);
+  const min = floors.length ? floors.reduce((a, b) => (b[1] < a[1] ? b : a)) : null;
+  const drop = ctx.type === 'price_drop' && ctx.oldPrice ? ` <s>${fmtTon(ctx.oldPrice)}</s> −${((1 - price / ctx.oldPrice) * 100).toFixed(1)}%` : '';
+
   const lines = [
-    `${head} · <b>${h(market).toUpperCase()}</b>`,
-    `<a href="${nftUrl(item.slug)}"><b>${h(item.collectionName)} #${giftNumber(item)}</b></a>`,
-    `💰 <b>${fmtTon(price)} TON</b>` +
-      (ctx.type === 'price_drop' && ctx.oldPrice ? ` <s>${fmtTon(ctx.oldPrice)}</s> <b>−${((1 - price / ctx.oldPrice) * 100).toFixed(1)}%</b>` : '') +
-      ` на <a href="${marketUrl(item)}">${h(market)}</a>`,
+    `${head} · <a href="${nftUrl(item.slug)}"><b>${h(item.collectionName)} #${giftNumber(item)}</b></a>`,
+    `💰 <b>${fmtTon(price)} TON</b>${drop} · <a href="${marketUrl(item)}">${h(market)}</a>`,
+    `🔸 <b>${h(item.modelName)}</b>${rar(ctx.rarity?.model)} · ${h(item.backdropName)}${rar(ctx.rarity?.backdrop)} · ${h(item.symbolName)}${rar(ctx.rarity?.symbol)}`,
   ];
-  if (minFloor != null && price < minFloor) lines.push(`🔥 <b>Ниже флора модели на ${((1 - price / minFloor) * 100).toFixed(1)}%</b>`);
-  if (item.isLocked) lines.push('🔒 Подарок с блокировкой вывода');
+  if (min && price < min[1]) lines.push(`🔥 <b>Ниже флора модели на ${((1 - price / min[1]) * 100).toFixed(1)}%</b>`);
+  if (item.isLocked) lines.push('🔒 С блокировкой вывода');
   lines.push(
     '',
-    `🔸 Модель: <b>${h(item.modelName)}</b>${rar(ctx.rarity?.model)}`,
-    `🔸 Фон: <b>${h(item.backdropName)}</b>${rar(ctx.rarity?.backdrop)}`,
-    `🔸 Узор: <b>${h(item.symbolName)}</b>${rar(ctx.rarity?.symbol)}`,
-    '',
-    `📊 <b>ФЛОР МОДЕЛИ</b>`,
-    ...MARKETS.map(m => {
+    `📊 <b>ФЛОР МОДЕЛИ:</b> ${min ? `<b>${fmtTon(min[1])} TON</b> ${MARKET_TITLES[min[0]]}${pct(price, min[1])}` : '—'}`,
+    `<blockquote expandable>${MARKETS.map(m => {
       const f = ctx.modelFloors?.[m];
-      const mark = m === item.market ? '🟠' : '⚫️';
-      const best = f != null && f === minFloor ? ' ⬅️ мин' : '';
-      return `${mark} ${MARKET_TITLES[m]}: ${f != null ? `<b>${fmtTon(f)} TON</b>${pct(price, f)}${best}` : '—'}`;
-    }),
-    `🟧 Флор коллекции на ${h(market)}: <b>${fmtTon(ctx.collectionFloor)} TON</b>${pct(price, ctx.collectionFloor)}`,
-    `🎨 Флор коллекции по фону (без этого): ${formatAttrFloor(ctx.backdropFloor, price)}`,
-    `💎 Флор модели и фона (без этого): ${formatAttrFloor(ctx.modelBackdropFloor, price)}`,
+      return `${m === item.market ? '🟠' : '⚫️'} ${MARKET_TITLES[m]}: ${f != null ? `<b>${fmtTon(f)}</b>${pct(price, f)}` : '—'}`;
+    }).join('\n')}</blockquote>`,
+    `🟧 Коллекция (${h(market)}): <b>${fmtTon(ctx.collectionFloor)}</b>${pct(price, ctx.collectionFloor)}`,
+    `🎨 Фон: ${formatAttrFloor(ctx.backdropFloor, price)}`,
+    `💎 Модель+фон: ${formatAttrFloor(ctx.modelBackdropFloor, price)}`,
     '',
-    `🕓 <b>ПОСЛЕДНИЕ ПРОДАЖИ МОДЕЛИ</b>`,
+    `🕓 <b>ПРОДАЖИ МОДЕЛИ</b>`,
     `<blockquote expandable>${formatSales(ctx.sales, now)}</blockquote>`,
   );
   return lines.join('\n');
@@ -196,7 +197,8 @@ export class Notifier {
     apply(await withTimeout(salesP, 900, null), await withTimeout(attrP, 900, null));
     const extra = {
       reply_markup: alertKeyboard(ctx.item),
-      link_preview_options: { url: nftUrl(ctx.item.slug), prefer_large_media: true, show_above_text: false },
+      // small preview: the gift picture is shown as a thumbnail, keeping the message short
+      link_preview_options: { url: nftUrl(ctx.item.slug), prefer_small_media: true, show_above_text: false },
     };
     const msg = await this.tg.send(chatId, formatAlert(ctx), extra);
     if (!ctx.sales || ctx.backdropFloor === undefined) {

@@ -97,15 +97,13 @@ test('formatAlert: contains listing, floors for 4 markets, sales with links; esc
     rarity: { model: 15, backdrop: 20, symbol: 4 },
     sales: [{ slug: 'ScaredCat-15506', number: 15506, market: 'mrkt', normalizedPrice: 268.5, soldAt: new Date(NOW - 3600_000).toISOString() }],
   }, NOW);
-  assert.match(text, /🟧 <b>ЛИСТИНГ<\/b> · <b>MRKT<\/b>/);
-  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-17114"><b>Scared Cat #17114<\/b><\/a>/);
-  assert.match(text, /💰 <b>273\.97 TON<\/b> на <a href="https:\/\/t\.me\/mrkt\/app\?startapp=abc-1">MRKT<\/a>/);
-  assert.match(text, /Purr&lt;lion&gt;/);
-  assert.match(text, /Флор коллекции на MRKT: <b>148 TON<\/b>/);
-  assert.match(text, /⚫️ Portals: <b>170 TON<\/b> \(\+61%\) ⬅️ мин/);
-  assert.match(text, /🟠 MRKT: <b>268\.5 TON<\/b> \(\+2\.0%\)/);
-  assert.match(text, /Tonnel: —/);
-  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-15506">#15506<\/a> · <b>268\.5 TON<\/b> · MRKT · 1 ч 0 мин назад <i>\(13\.11 05:00\)<\/i>/);
+  assert.match(text, /^🟧 <b>ЛИСТИНГ<\/b> · <a href="https:\/\/t\.me\/nft\/ScaredCat-17114"><b>Scared Cat #17114<\/b><\/a>/);
+  assert.match(text, /💰 <b>273\.97 TON<\/b> · <a href="https:\/\/t\.me\/mrkt\/app\?startapp=abc-1">MRKT<\/a>/);
+  assert.match(text, /🔸 <b>Purr&lt;lion&gt;<\/b> <i>1\.5%<\/i> · Navy Blue <i>2\.0%<\/i> · Spider <i>0\.4%<\/i>/);
+  assert.match(text, /📊 <b>ФЛОР МОДЕЛИ:<\/b> <b>170 TON<\/b> Portals \(\+61%\)/);
+  assert.match(text, /<blockquote expandable>⚫️ Portals: <b>170<\/b> \(\+61%\)\n🟠 MRKT: <b>268\.5<\/b> \(\+2\.0%\)\n⚫️ Tonnel: —/);
+  assert.match(text, /🟧 Коллекция \(MRKT\): <b>148<\/b>/);
+  assert.match(text, /<a href="https:\/\/t\.me\/nft\/ScaredCat-15506">#15506<\/a> <b>268\.5<\/b> MRKT · 1 ч 0 мин назад <i>05:00<\/i>/);
   assert.doesNotMatch(text, /Ниже флора/);
   const cheap = formatAlert({ type: 'listing', item: item({ normalizedPrice: 150 }), modelFloors: { portals: 170, mrkt: 200, tonnel: null, getgems: null }, collectionFloor: 148, sales: [] }, NOW);
   assert.match(cheap, /🔥 <b>Ниже флора модели на 11\.8%<\/b>/);
@@ -196,15 +194,15 @@ test('backdrop floors: cheapest lot over markets, model filter, formatting', asy
   assert.equal(model.slug, 'A-3');
   assert.equal(model.market, 'mrkt');
   assert.equal(cheapestOf(res, () => false), null);
-  assert.equal(formatAttrFloor(undefined, 40), '<i>загружаю…</i>');
+  assert.equal(formatAttrFloor(undefined, 40), '<i>…</i>');
   assert.equal(formatAttrFloor(null, 40), '—');
-  assert.equal(formatAttrFloor(model, 40), '<b>38.5 TON</b> на <a href="https://t.me/mrkt/app?startapp=m1">MRKT</a> (+3.9%)');
+  assert.equal(formatAttrFloor(model, 40), '<b>38.5</b> <a href="https://t.me/mrkt/app?startapp=m1">MRKT</a> (+3.9%)');
   const text = formatAlert({ type: 'listing', item: item(), modelFloors: {}, collectionFloor: 148, sales: [], backdropFloor: any, modelBackdropFloor: null }, NOW);
   const lines = text.split('\n');
-  const iColl = lines.findIndex(l => l.includes('Флор коллекции на MRKT'));
-  assert.match(lines[iColl + 1], /^🎨 Флор коллекции по фону \(без этого\): <b>36 TON<\/b> на <a href="https:\/\/t\.me\/portals\/market\?startapp=gift_p2">Portals<\/a>/);
-  assert.equal(lines[iColl + 2], '💎 Флор модели и фона (без этого): —');
-  assert.ok(lines.slice(iColl + 3).some(l => l.includes('ПОСЛЕДНИЕ ПРОДАЖИ')));
+  const iColl = lines.findIndex(l => l.includes('Коллекция (MRKT)'));
+  assert.match(lines[iColl + 1], /^🎨 Фон: <b>36<\/b> <a href="https:\/\/t\.me\/portals\/market\?startapp=gift_p2">Portals<\/a>/);
+  assert.equal(lines[iColl + 2], '💎 Модель+фон: —');
+  assert.ok(lines.slice(iColl + 3).some(l => l.includes('ПРОДАЖИ МОДЕЛИ')));
 });
 
 test('backdrop floors exclude the alerted gift itself', async () => {
@@ -233,5 +231,5 @@ test('telegram market: no listing time, new lots detected inside the previous pr
   assert.equal(marketUrl({ market: 'telegram', slug: 'LolPop-1', link: 'https://t.me/nft/LolPop-1' }), 'https://t.me/nft/LolPop-1');
   const tgText = formatAlert({ type: 'listing', item: { ...lot('SnakeBox-126488', 6.48), number: undefined, collectionName: 'Snake Box' }, modelFloors: {}, sales: [] }, NOW);
   assert.match(tgText, /Snake Box #126488/);
-  assert.match(tgText, /🟧 <b>ЛИСТИНГ<\/b> · <b>TELEGRAM<\/b>/);
+  assert.match(tgText, /💰 <b>6\.48 TON<\/b> · <a href=\"https:\/\/t\.me\/nft\/SnakeBox-126488\">Telegram<\/a>/);
 });
