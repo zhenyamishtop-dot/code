@@ -34,6 +34,11 @@ const firstByVolume = await page.locator('.tile b').first().innerText();
 await page.locator('#pickerSorts .chip', { hasText: 'Флор ↓' }).click();
 await page.waitForTimeout(600);
 const firstByFloor = await page.locator('.tile b').first().innerText();
+await page.locator('#pickerSorts .chip', { hasText: 'Продажи ↓' }).click();
+await page.waitForTimeout(600);
+const firstBySales = await page.locator('.tile b').first().innerText();
+const salesTop = await page.locator('.tile .tile-vol').evaluateAll(n => n.slice(0, 6).map(x => x.textContent));
+await shot('3b-picker-sales');
 await shot('3-picker-floor');
 await page.fill('#pickerSearch', 'cap');
 await page.waitForTimeout(300);
@@ -78,5 +83,5 @@ await shot('9-home-custom');
 
 const saved = await settings();
 const noAuth = await page.evaluate(async () => (await fetch('/api/bootstrap')).status);
-console.log(JSON.stringify({ tiles, firstByVolume, firstByFloor, found, afterPick, models, allChecked, afterUncheck, backdrops, patterns, patternsOn, noAuthStatus: noAuth, toyBear: saved.rules.find(r => r.collection === 'Toy Bear'), errors }, null, 1));
+console.log(JSON.stringify({ tiles, firstByVolume, firstByFloor, firstBySales, salesTop, found, afterPick, models, allChecked, afterUncheck, backdrops, patterns, patternsOn, noAuthStatus: noAuth, toyBear: saved.rules.find(r => r.collection === 'Toy Bear'), errors }, null, 1));
 await browser.close();

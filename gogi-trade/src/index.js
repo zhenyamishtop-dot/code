@@ -31,13 +31,17 @@ poller.on('price_drop', ev => notifier.handle(ev).catch(e => console.error('noti
 
 const server = createServer({ store, catalog, floors, poller, notifier, bot });
 
-const me = await bot.setup();
-console.log(`Бот @${me.username} запущен`);
+// UI_ONLY=1: local preview of the mini app without talking to Telegram (does not disturb a running bot)
+const uiOnly = process.env.UI_ONLY === '1';
+if (!uiOnly) {
+  const me = await bot.setup();
+  console.log(`Бот @${me.username} запущен`);
+}
 await catalog.init().catch(e => console.error('catalog init:', e.message));
 server.listen(config.port, () => console.log(`Мини-приложение: http://localhost:${config.port}` + (config.webappUrl ? ` (публично: ${config.webappUrl})` : ' (WEBAPP_URL не задан)')));
 floors.run(() => targets.map(t => t.collection));
 poller.start();
-tg.poll(u => bot.onUpdate(u));
+if (!uiOnly) tg.poll(u => bot.onUpdate(u));
 
 function shutdown() {
   console.log('Останавливаюсь…');

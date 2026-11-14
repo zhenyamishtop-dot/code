@@ -147,7 +147,7 @@
   }
 
   // ---- collection picker (multi-select) ----
-  const SORTS = [['volume-desc', 'Объём ↓'], ['volume-asc', 'Объём ↑'], ['floor-desc', 'Флор ↓'], ['floor-asc', 'Флор ↑'], ['name', 'А–Я'], ['picked', 'Выбранные']];
+  const SORTS = [['volume-desc', 'Объём ↓'], ['volume-asc', 'Объём ↑'], ['sales-desc', 'Продажи ↓'], ['sales-asc', 'Продажи ↑'], ['floor-desc', 'Флор ↓'], ['floor-asc', 'Флор ↑'], ['name', 'А–Я'], ['picked', 'Выбранные']];
   let visible = [];
 
   function openPicker() {
@@ -162,7 +162,7 @@
     const list = state.collections.filter(c => !q || norm(c).includes(q));
     const [key, dir] = state.sort.split('-');
     const sign = dir === 'asc' ? 1 : -1;
-    const val = { volume: n => vol(n)?.volume ?? -1, floor: n => minFloor(n) ?? -1 }[key];
+    const val = { volume: n => vol(n)?.volume ?? -1, sales: n => vol(n)?.sales ?? -1, floor: n => minFloor(n) ?? -1 }[key];
     if (val) list.sort((a, b) => {
       const va = val(a), vb = val(b);
       if (va < 0 || vb < 0) return (va < 0) - (vb < 0) || a.localeCompare(b); // unknown values go last
@@ -189,7 +189,8 @@
         el('span', { class: 'tick' }),
         img(colImg(name)), el('b', {}, name),
         el('small', { class: 'tile-floor' }, floor != null ? `${ton(floor)} TON` : '—'),
-        el('small', { class: 'tile-vol' }, v ? `${compact(v.volume)} TON · ${v.sales}` : 'нет продаж'));
+        el('small', { class: 'tile-vol' }, v ? `24ч: ${compact(v.volume)} TON` : '24ч: нет продаж'),
+        v ? el('small', { class: 'tile-vol' }, `${v.sales} продаж`) : null);
     }));
     renderPickerFoot();
   }
