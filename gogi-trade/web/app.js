@@ -5,8 +5,8 @@
   const $ = id => document.getElementById(id);
   const CDN = 'https://cdn.changes.tg/gifts';
   const norm = s => String(s ?? '').replace(/[’‘`ʼ]/g, "'").trim().toLowerCase();
-  // the image CDN spells apostrophes the typographic way
-  const cdnName = s => encodeURIComponent(String(s).replace(/'/g, '’'));
+  // the image CDN uses a plain apostrophe (Durov's Cap), Gift Satellite sometimes the typographic one
+  const cdnName = s => encodeURIComponent(String(s).replace(/[’‘ʼ`]/g, "'"));
   const colImg = name => `${CDN}/models/${cdnName(name)}/png/Original.png`;
   const modelImg = (col, model) => `${CDN}/models/${cdnName(col)}/png/${cdnName(model)}.png`;
   const patternImg = (col, p) => `${CDN}/patterns/${cdnName(col)}/png/${cdnName(p)}.png`;
@@ -79,6 +79,20 @@
   // every Gift Satellite key polls its share of collections in parallel (1 req/s per market each)
   const cycleFor = n => Math.max(1, Math.round(Math.ceil(n / Math.max(1, state.status?.keys || 1)) * 1.05));
 
+  // ---- ticker: top collections by 24h volume ----
+  function renderTicker() {
+    const top = state.collections
+      .map(n => ({ n, v: vol(n), f: minFloor(n) }))
+      .filter(x => x.v && x.f != null)
+      .sort((a, b) => b.v.volume - a.v.volume)
+      .slice(0, 14);
+    const box = $('ticker');
+    if (!top.length) { box.hidden = true; return; }
+    const row = () => top.map(x => el('span', { class: 'tk' }, img(colImg(x.n)), el('b', {}, x.n), el('span', { class: 'p' }, `${ton(x.f)} TON`), el('span', { class: 'v' }, compact(x.v.volume))));
+    $('tickerTrack').replaceChildren(...row(), ...row()); // duplicated for a seamless loop
+    box.hidden = false;
+  }
+
   // ---- main screen ----
   function renderHeader() {
     const s = state.settings, st = state.status;
@@ -95,8 +109,8 @@
     if (document.activeElement !== $('dropPct')) $('dropPct').value = s.minDropPct ?? 3;
     $('stats').replaceChildren(
       el('div', { class: 'stat' }, el('b', {}, String(active)), el('span', {}, 'коллекций')),
-      el('div', { class: 'stat' }, el('b', {}, active && s.enabled ? '~' + cycle : '—', el('small', {}, active && s.enabled ? 'сек' : '')), el('span', {}, 'круг опроса')),
-      el('div', { class: 'stat' }, el('b', {}, String(st?.alerts ?? 0)), el('span', {}, 'уведомлений')),
+      el('div', { class: 'stat' }, el('b', {}, active && s.enabled ? '~' + cycle : '—', el('small', {}, active && s.enabled ? 'сек' : '')), el('span', {}, 'круг')),
+      el('div', { class: 'stat' }, el('b', {}, String(st?.alerts ?? 0)), el('span', {}, 'сигналов')),
     );
     $('markets').replaceChildren(...state.markets.map(m => {
       const on = s.markets[m.id] !== false;
@@ -354,7 +368,7 @@
   }
 
   async function start() {
-    try { tg?.ready(); tg?.expand(); tg?.setHeaderColor?.('#090c12'); tg?.setBackgroundColor?.('#090c12'); } catch { /* not in Telegram */ }
+    try { tg?.ready(); tg?.expand(); tg?.setHeaderColor?.('#050505'); tg?.setBackgroundColor?.('#050505'); tg?.setBottomBarColor?.('#050505'); } catch { /* not in Telegram */ }
     try {
       const b = await api('GET', '/api/bootstrap');
       Object.assign(state, { settings: b.settings, collections: b.collections, collectionFloors: b.collectionFloors, volumes: b.volumes || {}, backdropColors: b.backdropColors, markets: b.markets, status: b.status });
@@ -362,7 +376,7 @@
       $('app').replaceChildren(el('div', { class: 'empty', style: 'padding-top:30vh' }, el('div', { class: 'empty-art' }, '⚡'), el('b', {}, 'Gogi Trade'), e.message));
       return;
     }
-    bind(); renderHeader(); renderRules(true);
+    bind(); renderHeader(); renderTicker(); renderRules(true);
     document.body.classList.add('ready');
     setInterval(refreshStatus, 4000);
   }
