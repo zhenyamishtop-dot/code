@@ -5,20 +5,38 @@ import { RateGate, sleep } from './util.js';
 
 export class Satellite {
   constructor({ tokens = config.satelliteTokens, token, base = config.satelliteBase, fetchImpl = fetch } = {}) {
-    this.tokens = token ? [token] : [...tokens];
-    if (!this.tokens.length) throw new Error('No Gift Satellite API key');
     this.base = base;
     this.fetch = fetchImpl;
-    // Per key: 1 request / second per market on /search/*; other routes are polled gently.
     this.gates = {};
-    this.keyStats = this.tokens.map(() => ({ ok: 0, rateLimited: 0, errors: 0, disabled: false, lastError: null }));
-    this.tokens.forEach((_, k) => {
-      for (const [g, gap] of [['history', 350], ['floors', 350], ['gift', 1100]]) this.gates[`${g}#${k}`] = new RateGate(gap);
-      for (const m of MARKETS) this.gates[`search:${m}#${k}`] = new RateGate(config.searchGapMs);
-    });
+    this.setTokens(token ? [token] : tokens);
     this.rr = 0;
     this.stats = { ok: 0, rateLimited: 0, errors: 0, lastError: null, lastOkAt: 0 };
     this.lastMs = {}; // gate -> duration of the last HTTP round trip
+  }
+
+  /** Replaces the key list on the fly (the poller picks the new keys up by itself). */
+  setTokens(tokens) {
+    const list = [...new Set((tokens || []).map(t => String(t).trim()).filter(Boolean))];
+    if (!list.length) throw new Error('No Gift Satellite API key');
+    this.tokens = list;
+    // Per key: 1 request / second per market on /search/*; other routes are polled gently.
+    this.keyStats = list.map(() => ({ ok: 0, rateLimited: 0, errors: 0, disabled: false, lastError: null }));
+    list.forEach((_, k) => {
+      for (const [g, gap] of [['history', 350], ['floors', 350], ['gift', 1100]]) this.gates[`${g}#${k}`] ||= new RateGate(gap);
+      for (const m of MARKETS) this.gates[`search:${m}#${k}`] ||= new RateGate(config.searchGapMs);
+    });
+  }
+
+  /** 'ok' | 'bad' (rejected by the API) | 'error' (network / unknown) for a key that is not in use yet. */
+  async checkKey(token) {
+    try {
+      const res = await this.fetch(this.base + '/search/mrkt/' + encodeURIComponent('Lol Pop') + '?models=&backdrops=&symbols=&starsOnly=false', {
+        headers: { Authorization: 'Token ' + token }, signal: AbortSignal.timeout(10000),
+      });
+      await res.arrayBuffer().catch(() => {});
+      if (res.ok || res.status === 429) return 'ok';
+      return res.status === 401 || res.status === 403 ? 'bad' : 'error';
+    } catch { return 'error'; }
   }
 
   get keyCount() { return this.tokens.length; }
@@ -34,14 +52,20 @@ export class Satellite {
     for (let attempt = 0; ; attempt++) {
       const k = key ?? this.nextKey();
       const gate = `${gateName}#${k}`;
+      const token = this.tokens[k];
       const ks = this.keyStats[k];
       await this.gates[gate].take();
+      // the key list was replaced while this request waited for its slot
+      if (this.tokens[k] !== token) {
+        if (key == null && attempt < retries) continue;
+        throw new Error('key list changed');
+      }
       let res;
       const startedAt = Date.now();
       try {
         res = await this.fetch(this.base + path, {
           method,
-          headers: { Authorization: 'Token ' + this.tokens[k], ...(body ? { 'Content-Type': 'application/json' } : {}) },
+          headers: { Authorization: 'Token ' + token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
           body: body ? JSON.stringify(body) : undefined,
           signal: AbortSignal.timeout(timeoutMs),
         });
@@ -63,7 +87,7 @@ export class Satellite {
         const text = await res.text().catch(() => '');
         this.stats.errors++; ks.errors++; this.stats.lastError = ks.lastError = `${path}: HTTP ${res.status} ${text.slice(0, 120)}`;
         // a revoked / wrong key is taken out of rotation; the others share its collections
-        if (res.status === 401 && this.activeKeys().length > 1) { ks.disabled = true; console.error(`Ключ Gift Satellite №${k + 1} отклонён (401) и отключён`); }
+        if (res.status === 401 && this.tokens[k] === token && this.activeKeys().length > 1) { ks.disabled = true; console.error(`Ключ Gift Satellite №${k + 1} отклонён (401) и отключён`); }
         const err = new Error(`HTTP ${res.status} ${path} ${text.slice(0, 120)}`);
         err.status = res.status;
         if (res.status >= 500 && attempt < retries) { await sleep(700 * (attempt + 1)); continue; }

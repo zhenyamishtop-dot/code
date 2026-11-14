@@ -58,7 +58,16 @@ export class Poller extends EventEmitter {
 
   start() {
     this.running = true;
-    for (const m of MARKETS) for (let k = 0; k < this.sat.keyCount; k++) this.loop(m, k);
+    this.active = new Set(); // "market#key" of running loops
+    this.syncLoops();
+  }
+
+  /** Starts loops for keys added at runtime; loops of removed keys stop by themselves. */
+  syncLoops() {
+    if (!this.running) return;
+    for (let k = 0; k < this.sat.keyCount; k++) for (const m of MARKETS) {
+      if (!this.active.has(m + '#' + k)) this.loop(m, k);
+    }
   }
   stop() { this.running = false; }
 
@@ -77,7 +86,13 @@ export class Poller extends EventEmitter {
 
   async loop(market, key) {
     const cursorKey = market + '#' + key;
+    this.active.add(cursorKey);
+    try { await this.run(market, key, cursorKey); } finally { this.active.delete(cursorKey); }
+  }
+
+  async run(market, key, cursorKey) {
     while (this.running) {
+      if (key >= this.sat.keyCount) return;
       const targets = this.assigned(market, key);
       if (!targets.length) { await sleep(700); continue; }
       const target = targets[(this.cursor[cursorKey] = (this.cursor[cursorKey] || 0) + 1) % targets.length];

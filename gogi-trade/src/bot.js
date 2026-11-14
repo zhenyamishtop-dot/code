@@ -13,7 +13,14 @@ const COMMANDS = [
   { command: 'resume', description: 'Включить уведомления' },
   { command: 'test', description: 'Прислать тестовое уведомление' },
   { command: 'users', description: 'Кому открыт доступ (для владельца)' },
+  { command: 'keys', description: 'Ключи Gift Satellite (для владельца)' },
 ];
+
+/** Gift Satellite keys in any text: one per line, numbered, comma or space separated. */
+export const extractKeys = text => [...new Set((String(text).match(/\b[a-f0-9]{64}\b/gi) || []).map(k => k.toLowerCase()))];
+/** True when the message holds nothing but keys (and list numbering like "1."). */
+export const isOnlyKeys = text => !String(text).replace(/\b[a-f0-9]{64}\b/gi, '').replace(/(^|\s)\d{1,3}[.)]/g, ' ').replace(/[\s,;]+/g, '').length;
+const maskKey = k => `${k.slice(0, 4)}…${k.slice(-4)}`;
 
 export class Bot {
   constructor({ tg, store, catalog, poller, notifier, floors, sat }) {
@@ -82,6 +89,34 @@ export class Bot {
     }).join('\n');
   }
 
+  keysText() {
+    const st = this.sat.keyStats;
+    const rows = this.sat.tokens.map((k, i) => `${i + 1}. <code>${maskKey(k)}</code> — ${st[i]?.disabled ? 'отключён (API отклонил)' : 'работает'}`);
+    return `<b>Ключи Gift Satellite: ${this.sat.activeKeys().length} из ${this.sat.keyCount} работают</b>\n${rows.join('\n')}\n\n` +
+      'Чтобы заменить список, просто отправьте все ключи одним сообщением (по одному в строке). Сообщение с ключами я сразу удалю.';
+  }
+
+  /** Replaces the key list from a message; the message with keys is deleted from the chat. */
+  async keysCommand(chatId, msg, text) {
+    const keys = extractKeys(text);
+    if (msg?.message_id && keys.length) await this.tg.call('deleteMessage', { chat_id: chatId, message_id: msg.message_id }).catch(() => {});
+    if (!keys.length) return this.tg.send(chatId, this.keysText());
+    const status = await this.tg.send(chatId, `Проверяю ${keys.length} ключ(ей)…`);
+    const results = [];
+    for (const k of keys) results.push([k, await this.sat.checkKey(k)]);
+    const good = results.filter(([, r]) => r === 'ok').map(([k]) => k);
+    const bad = results.filter(([, r]) => r !== 'ok');
+    const lines = bad.map(([k, r]) => `<code>${maskKey(k)}</code> — ${r === 'bad' ? 'отклонён API' : 'не удалось проверить'}`);
+    if (!good.length) return this.tg.edit(chatId, status.message_id, '❌ Ни один ключ не прошёл проверку, оставил прежние.\n' + lines.join('\n'));
+    this.sat.setTokens(good);
+    this.poller.syncLoops();
+    this.store.state.satelliteKeys = good;
+    this.store.save();
+    const cycle = Math.max(1, Math.round(this.poller.cycleSeconds()));
+    return this.tg.edit(chatId, status.message_id, `✅ Подключено ключей: <b>${good.length}</b>. Круг опроса сейчас ~${cycle} сек.` +
+      (lines.length ? '\n\nНе подключены:\n' + lines.join('\n') : '') + '\n\nСообщение с ключами удалено из чата.');
+  }
+
   async sendTest(chatId, userId) {
     const s = this.store.user(userId).settings;
     const collection = s.rules.find(r => r.enabled !== false)?.collection || 'Lol Pop';
@@ -121,7 +156,15 @@ export class Bot {
     else if (msg?.text?.startsWith('/')) {
       const m = msg.text.match(/^\/([a-z_]+)(?:@\w+)?\s*([\s\S]*)$/i);
       if (m) { cmd = m[1].toLowerCase(); arg = m[2].trim(); }
+    } else if (msg?.text && this.store.isOwner(from.id) && extractKeys(msg.text).length && isOnlyKeys(msg.text)) {
+      // the owner just pasted a list of Gift Satellite keys
+      cmd = 'keys'; arg = msg.text;
     } else return;
+
+    if (cmd === 'keys') {
+      if (!this.store.isOwner(from.id)) return this.tg.send(chatId, 'Эта команда доступна только владельцу.');
+      return this.keysCommand(chatId, msg, arg);
+    }
 
     // owner-only access management
     const access = cmd.match(/^(allow|deny)(?::(\d+))?$/);

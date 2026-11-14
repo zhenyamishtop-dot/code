@@ -54,16 +54,18 @@ if (-not (Test-Path $cf)) {
 $envFile = Join-Path $target '.env'
 
 function Read-SatelliteKeys {
-  Write-Host 'Paste Gift Satellite API keys (Profile -> API access), one per line.' -ForegroundColor Cyan
-  Write-Host 'Each key polls its own share of collections. Press Enter on an empty line to finish.' -ForegroundColor Cyan
+  Write-Host 'Paste ALL Gift Satellite API keys at once (Ctrl+V, the whole list), then press Enter on an empty line.' -ForegroundColor Cyan
+  Write-Host 'Numbered lists, commas and spaces are fine. Keys can also be sent to the bot later as one message.' -ForegroundColor Cyan
   $keys = @()
   while ($true) {
-    $k = (Read-Host ('Key ' + ($keys.Count + 1))).Trim()
-    if (-not $k) { if ($keys.Count) { break } else { continue } }
-    if ($k -notmatch '^[A-Za-z0-9]{20,}$') { Write-Host 'This does not look like a key, try again.' -ForegroundColor Yellow; continue }
-    if ($keys -contains $k) { Write-Host 'Already added.' -ForegroundColor Yellow; continue }
-    $keys += $k
+    $line = Read-Host ('Keys so far: ' + $keys.Count)
+    if (-not $line.Trim()) { if ($keys.Count) { break } else { continue } }
+    foreach ($m in [regex]::Matches($line, '\b[A-Fa-f0-9]{64}\b')) {
+      $k = $m.Value.ToLower()
+      if ($keys -notcontains $k) { $keys += $k }
+    }
   }
+  Write-Host ('Keys added: ' + $keys.Count) -ForegroundColor Green
   return ($keys -join ',')
 }
 

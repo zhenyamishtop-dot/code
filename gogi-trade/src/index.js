@@ -12,8 +12,11 @@ import { buildTargets } from './filters.js';
 
 assertConfig();
 
-const sat = new Satellite();
 const store = new Store();
+// keys sent to the bot (/keys) are stored in state.json and take priority over .env
+const keys = store.state.satelliteKeys?.length ? store.state.satelliteKeys : config.satelliteTokens;
+if (!keys.length) { console.error('Нет ключей Gift Satellite: задайте SATELLITE_TOKENS в .env'); process.exit(1); }
+const sat = new Satellite({ tokens: keys });
 const catalog = new Catalog(sat);
 const floors = new Floors(sat);
 const tg = new Telegram();

@@ -46,3 +46,31 @@ test('friend access: request -> owner approves -> friend can use the bot; deny r
   assert.equal(store.isAllowed(2), false);
   assert.deepEqual(store.activeUsers().map(u => u.id), ['1']);
 });
+
+test('owner can paste a list of keys; keys are validated, applied and the message deleted', async () => {
+  const { extractKeys, isOnlyKeys } = await import('../src/bot.js');
+  const a = 'a'.repeat(64), b = 'b'.repeat(64), c = 'c'.repeat(64);
+  assert.deepEqual(extractKeys(`1. ${a}\n2. ${b}\n3. ${a}`), [a, b]);
+  assert.ok(isOnlyKeys(`1. ${a}\n2. ${b}`));
+  assert.ok(isOnlyKeys(`${a}, ${b}`));
+  assert.ok(!isOnlyKeys(`вот ключи ${a}`));
+
+  const { store, msg } = setup();
+  const calls = [];
+  const sat = { tokens: [c], keyStats: [{}], keyCount: 1, activeKeys() { return this.tokens.map((_, i) => i); },
+    checkKey: async k => (k === b ? 'bad' : 'ok'), setTokens(t) { this.tokens = t; this.keyCount = t.length; this.keyStats = t.map(() => ({})); } };
+  const { Bot } = await import('../src/bot.js');
+  const sent = [];
+  const tg = { send: async (chat, text) => { sent.push(text); return { message_id: 9 }; }, edit: async (chat, id, text) => { sent.push(text); }, call: async (m, p) => { calls.push([m, p]); return {}; } };
+  const bot = new Bot({ tg, store, catalog: { collections: [], resolve: () => null }, poller: { cycleSeconds: () => 1, syncLoops() {}, stats: {} }, notifier: { stats: {} }, floors: {}, sat });
+  await bot.onUpdate({ message: { message_id: 77, from: { id: 1 }, chat: { id: 1, type: 'private' }, text: `1. ${a}\n2. ${b}` } });
+  assert.deepEqual(sat.tokens, [a]);
+  assert.deepEqual(store.state.satelliteKeys, [a]);
+  assert.ok(calls.some(([m, p]) => m === 'deleteMessage' && p.message_id === 77));
+  assert.match(sent.at(-1), /Подключено ключей: <b>1<\/b>/);
+  assert.match(sent.at(-1), /<code>bbbb…bbbb<\/code> — отклонён API/);
+  // a friend cannot change keys
+  store.allow('2');
+  await bot.onUpdate({ message: { message_id: 78, from: { id: 2 }, chat: { id: 2, type: 'private' }, text: `/keys ${c}` } });
+  assert.deepEqual(sat.tokens, [a]);
+});

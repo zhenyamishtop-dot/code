@@ -37,7 +37,6 @@ export const config = {
 export function assertConfig() {
   const missing = [];
   if (!config.botToken) missing.push('BOT_TOKEN');
-  if (!config.satelliteTokens.length) missing.push('SATELLITE_TOKENS');
   if (missing.length) {
     console.error('Не заданы переменные: ' + missing.join(', ') + '. Скопируйте .env.example в .env и заполните.');
     process.exit(1);
