@@ -64,8 +64,7 @@ export function formatSales(sales, now = Date.now()) {
 }
 
 /**
- * Compact orange "terminal" layout. Telegram cannot colour text, so the palette comes from
- * orange/black markers; per-market floors and sales are collapsible quotes.
+ * Compact plain layout (no decorative emoji); per-market floors and sales are collapsible quotes.
  * ctx: { type, item, oldPrice, modelFloors:{market:price|null}, collectionFloor, sales:Array|null,
  *        rarity:{model,backdrop,symbol}, backdropFloor, modelBackdropFloor }
  */
@@ -73,7 +72,7 @@ export function formatAlert(ctx, now = Date.now()) {
   const { item } = ctx;
   const price = Number(item.normalizedPrice);
   const market = MARKET_TITLES[item.market] || item.market;
-  const head = ctx.type === 'price_drop' ? '🔻 <b>СНИЖЕНИЕ</b>' : ctx.type === 'test' ? '🧪 <b>ТЕСТ</b>' : '🟧 <b>ЛИСТИНГ</b>';
+  const head = ctx.type === 'price_drop' ? '<b>СНИЖЕНИЕ ЦЕНЫ</b>' : ctx.type === 'test' ? '<b>ТЕСТ</b>' : '<b>ЛИСТИНГ</b>';
   const rar = v => (v != null ? ` <i>${(v / 10).toFixed(1)}%</i>` : '');
   const floors = MARKETS.map(m => [m, ctx.modelFloors?.[m]]).filter(([, v]) => v != null && v > 0);
   const min = floors.length ? floors.reduce((a, b) => (b[1] < a[1] ? b : a)) : null;
@@ -81,23 +80,23 @@ export function formatAlert(ctx, now = Date.now()) {
 
   const lines = [
     `${head} · <a href="${nftUrl(item.slug)}"><b>${h(item.collectionName)} #${giftNumber(item)}</b></a>`,
-    `💰 <b>${fmtTon(price)} TON</b>${drop} · <a href="${marketUrl(item)}">${h(market)}</a>`,
-    `🔸 <b>${h(item.modelName)}</b>${rar(ctx.rarity?.model)} · ${h(item.backdropName)}${rar(ctx.rarity?.backdrop)} · ${h(item.symbolName)}${rar(ctx.rarity?.symbol)}`,
+    `<b>${fmtTon(price)} TON</b>${drop} · <a href="${marketUrl(item)}">${h(market)}</a>`,
+    `<b>${h(item.modelName)}</b>${rar(ctx.rarity?.model)} · ${h(item.backdropName)}${rar(ctx.rarity?.backdrop)} · ${h(item.symbolName)}${rar(ctx.rarity?.symbol)}`,
   ];
-  if (min && price < min[1]) lines.push(`🔥 <b>Ниже флора модели на ${((1 - price / min[1]) * 100).toFixed(1)}%</b>`);
-  if (item.isLocked) lines.push('🔒 С блокировкой вывода');
+  if (min && price < min[1]) lines.push(`<b>Ниже флора модели на ${((1 - price / min[1]) * 100).toFixed(1)}%</b>`);
+  if (item.isLocked) lines.push('<i>С блокировкой вывода</i>');
   lines.push(
     '',
-    `📊 <b>ФЛОР МОДЕЛИ:</b> ${min ? `<b>${fmtTon(min[1])} TON</b> ${MARKET_TITLES[min[0]]}${pct(price, min[1])}` : '—'}`,
+    `<b>Флор модели:</b> ${min ? `<b>${fmtTon(min[1])} TON</b> ${MARKET_TITLES[min[0]]}${pct(price, min[1])}` : '—'}`,
     `<blockquote expandable>${MARKETS.map(m => {
       const f = ctx.modelFloors?.[m];
-      return `${m === item.market ? '🟠' : '⚫️'} ${MARKET_TITLES[m]}: ${f != null ? `<b>${fmtTon(f)}</b>${pct(price, f)}` : '—'}`;
+      return `${m === item.market ? '▸ ' : ''}${MARKET_TITLES[m]}: ${f != null ? `<b>${fmtTon(f)}</b>${pct(price, f)}` : '—'}`;
     }).join('\n')}</blockquote>`,
-    `🟧 Коллекция (${h(market)}): <b>${fmtTon(ctx.collectionFloor)}</b>${pct(price, ctx.collectionFloor)}`,
-    `🎨 Фон: ${formatAttrFloor(ctx.backdropFloor, price)}`,
-    `💎 Модель+фон: ${formatAttrFloor(ctx.modelBackdropFloor, price)}`,
+    `Флор коллекции (${h(market)}): <b>${fmtTon(ctx.collectionFloor)}</b>${pct(price, ctx.collectionFloor)}`,
+    `Флор по фону: ${formatAttrFloor(ctx.backdropFloor, price)}`,
+    `Флор модели и фона: ${formatAttrFloor(ctx.modelBackdropFloor, price)}`,
     '',
-    `🕓 <b>ПРОДАЖИ МОДЕЛИ</b>`,
+    `<b>Продажи модели</b>`,
     `<blockquote expandable>${formatSales(ctx.sales, now)}</blockquote>`,
   );
   return lines.join('\n');
@@ -105,8 +104,8 @@ export function formatAlert(ctx, now = Date.now()) {
 
 export function alertKeyboard(item) {
   return { inline_keyboard: [[
-    { text: `🟧 Купить на ${MARKET_TITLES[item.market] || item.market}`, url: marketUrl(item) },
-    { text: '🎁 Подарок', url: nftUrl(item.slug) },
+    { text: `Купить на ${MARKET_TITLES[item.market] || item.market}`, url: marketUrl(item) },
+    { text: 'Подарок', url: nftUrl(item.slug) },
   ]] };
 }
 
