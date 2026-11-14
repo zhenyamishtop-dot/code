@@ -180,3 +180,29 @@ test('config: keys from SATELLITE_TOKENS and SATELLITE_TOKEN are merged and dedu
   const { config } = await import('../src/config.js?keys');
   assert.deepEqual(config.satelliteTokens, ['aaa', 'bbb', 'ccc']);
 });
+
+test('backdrop floors: cheapest lot over markets, model filter, formatting', async () => {
+  const { cheapestOf, formatAttrFloor } = await import('../src/notifier.js');
+  const res = {
+    portals: [{ slug: 'A-1', giftId: 'p1', modelName: 'Cotton', normalizedPrice: 40 }, { slug: 'A-2', giftId: 'p2', modelName: 'Peanut', normalizedPrice: 36 }],
+    mrkt: [{ slug: 'A-3', giftId: 'm1', modelName: 'Cotton', normalizedPrice: 38.5 }],
+    tonnel: null, // failed market
+    getgems: [],
+  };
+  const any = cheapestOf(res);
+  assert.equal(any.slug, 'A-2');
+  assert.equal(any.market, 'portals');
+  const model = cheapestOf(res, it => it.modelName === 'Cotton');
+  assert.equal(model.slug, 'A-3');
+  assert.equal(model.market, 'mrkt');
+  assert.equal(cheapestOf(res, () => false), null);
+  assert.equal(formatAttrFloor(undefined, 40), '<i>загружаю…</i>');
+  assert.equal(formatAttrFloor(null, 40), '—');
+  assert.equal(formatAttrFloor(model, 40), '<b>38.5 TON</b> на <a href="https://t.me/mrkt/app?startapp=m1">MRKT</a> (+3.9%)');
+  const text = formatAlert({ type: 'listing', item: item(), modelFloors: {}, collectionFloor: 148, sales: [], backdropFloor: any, modelBackdropFloor: null }, NOW);
+  const lines = text.split('\n');
+  const iColl = lines.findIndex(l => l.includes('Флор коллекции на MRKT'));
+  assert.match(lines[iColl + 1], /^🎨 Флор коллекции по фону: <b>36 TON<\/b> на <a href="https:\/\/t\.me\/portals\/market\?startapp=gift_p2">Portals<\/a>/);
+  assert.equal(lines[iColl + 2], '💎 Флор модели и фона: —');
+  assert.ok(lines.slice(iColl + 3).some(l => l.includes('ПОСЛЕДНИЕ ПРОДАЖИ')));
+});

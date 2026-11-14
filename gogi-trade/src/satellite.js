@@ -75,7 +75,8 @@ export class Satellite {
   }
 
   /** 50 cheapest listings of a collection on one market (optionally narrowed by attributes). */
-  search(market, collection, { models = [], backdrops = [], symbols = [] } = {}, key = 0) {
+  /** `key` pins a key (poller); omitted = next working key (one-off lookups such as alert enrichment). */
+  search(market, collection, { models = [], backdrops = [], symbols = [] } = {}, key = this.nextKey()) {
     const q = new URLSearchParams({ models: models.join(','), backdrops: backdrops.join(','), symbols: symbols.join(','), starsOnly: 'false' });
     return this.request('search:' + market, `/search/${market}/${encodeURIComponent(collection)}?${q}`, { retries: 0, key });
   }

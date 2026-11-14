@@ -24,6 +24,27 @@ const pct = (price, floor) => {
   return ` (${s}%)`;
 };
 
+/** "<b>12.5 TON</b> на <a>MRKT</a> (+3%)" for the cheapest matching lot, or a loading / empty marker. */
+export function formatAttrFloor(best, price) {
+  if (best === undefined) return '<i>загружаю…</i>';
+  if (!best) return '—';
+  const title = MARKET_TITLES[best.market] || best.market;
+  return `<b>${fmtTon(best.normalizedPrice)} TON</b> на <a href="${marketUrl(best)}">${h(title)}</a>${pct(price, Number(best.normalizedPrice))}`;
+}
+
+/** Cheapest lot over several markets' search results; `filter` narrows the candidates. */
+export function cheapestOf(resultsByMarket, filter = () => true) {
+  let best = null;
+  for (const [market, items] of Object.entries(resultsByMarket || {})) {
+    for (const it of Array.isArray(items) ? items : []) {
+      if (!filter(it)) continue;
+      const p = Number(it.normalizedPrice);
+      if (p > 0 && (!best || p < Number(best.normalizedPrice))) best = { ...it, market: it.market || market };
+    }
+  }
+  return best;
+}
+
 export function formatSales(sales, now = Date.now()) {
   if (!sales) return '<i>загружаю…</i>';
   if (!sales.length) return '<i>продаж пока не было</i>';
@@ -69,6 +90,8 @@ export function formatAlert(ctx, now = Date.now()) {
       return `${mark} ${MARKET_TITLES[m]}: ${f != null ? `<b>${fmtTon(f)} TON</b>${pct(price, f)}${best}` : '—'}`;
     }),
     `🟧 Флор коллекции на ${h(market)}: <b>${fmtTon(ctx.collectionFloor)} TON</b>${pct(price, ctx.collectionFloor)}`,
+    `🎨 Флор коллекции по фону: ${formatAttrFloor(ctx.backdropFloor, price)}`,
+    `💎 Флор модели и фона: ${formatAttrFloor(ctx.modelBackdropFloor, price)}`,
     '',
     `🕓 <b>ПОСЛЕДНИЕ ПРОДАЖИ МОДЕЛИ</b>`,
     `<blockquote expandable>${formatSales(ctx.sales, now)}</blockquote>`,
@@ -87,6 +110,7 @@ export class Notifier {
   constructor({ tg, sat, floors, catalog, store }) {
     Object.assign(this, { tg, sat, floors, catalog, store });
     this.salesCache = new Map(); // normCollection|normModel -> { at, promise }
+    this.attrCache = new Map();  // query key -> { at, promise of { market: items[] } }
     this.sent = new Map();       // userId|giftKey|price -> ts (dedupe across markets' loops)
     this.stats = { alerts: 0, lastAlertAt: 0, lastLatencyMs: 0 };
   }
@@ -99,6 +123,37 @@ export class Notifier {
     this.salesCache.set(key, { at: Date.now(), promise });
     if (this.salesCache.size > 500) for (const [k, v] of this.salesCache) if (Date.now() - v.at > 60_000) this.salesCache.delete(k);
     return promise;
+  }
+
+  /** Search all markets with a narrowed query (cached briefly; failures count as "no data" for that market). */
+  searchAll(collection, query) {
+    const key = norm(collection) + '|' + JSON.stringify(query);
+    const hit = this.attrCache.get(key);
+    if (hit && Date.now() - hit.at < 30_000) return hit.promise;
+    const promise = Promise.all(MARKETS.map(m => this.sat.search(m, collection, query).then(r => [m, r], () => [m, null])))
+      .then(pairs => Object.fromEntries(pairs));
+    this.attrCache.set(key, { at: Date.now(), promise });
+    if (this.attrCache.size > 300) for (const [k, v] of this.attrCache) if (Date.now() - v.at > 120_000) this.attrCache.delete(k);
+    return promise;
+  }
+
+  /**
+   * Cheapest lot of the collection with the same backdrop (any model) and with the same model + backdrop,
+   * over all markets. The backdrop search usually already contains the model; a second, narrower search
+   * is made only when the 50 cheapest backdrop lots have no lot of this model.
+   */
+  async attrFloors(item) {
+    const col = item.collectionName;
+    const byBackdrop = await this.searchAll(col, { models: [], backdrops: [item.backdropName], symbols: [] });
+    const backdropFloor = cheapestOf(byBackdrop);
+    const sameModel = it => norm(it.modelName) === norm(item.modelName);
+    let modelBackdropFloor = cheapestOf(byBackdrop, sameModel);
+    const truncated = Object.values(byBackdrop).some(r => Array.isArray(r) && r.length >= 50);
+    if (truncated) {
+      const narrow = await this.searchAll(col, { models: [item.modelName], backdrops: [item.backdropName], symbols: [] });
+      modelBackdropFloor = cheapestOf(narrow) || modelBackdropFloor;
+    }
+    return { backdropFloor, modelBackdropFloor };
   }
 
   rarity(item) {
@@ -116,21 +171,31 @@ export class Notifier {
       collectionFloor: this.floors.collectionFloor(item.market, item.collectionName),
       rarity: this.rarity(item),
       sales: null,
+      backdropFloor: undefined,     // undefined = still loading, null = nothing on sale
+      modelBackdropFloor: undefined,
     };
   }
 
-  /** Sends the alert right away; if sales are not ready within a moment, the message is completed by an edit. */
+  /**
+   * Sends the alert right away; sales and backdrop floors that are not ready within a moment
+   * are filled in by editing the message once they arrive.
+   */
   async deliver(chatId, ctx) {
-    const salesPromise = this.sales(ctx.item.collectionName, ctx.item.modelName);
-    ctx.sales = await withTimeout(salesPromise, 900, null);
+    const salesP = this.sales(ctx.item.collectionName, ctx.item.modelName).then(v => v || []);
+    const attrP = this.attrFloors(ctx.item).catch(() => ({ backdropFloor: null, modelBackdropFloor: null }));
+    const apply = (sales, attr) => {
+      if (sales) ctx.sales = sales;
+      if (attr) { ctx.backdropFloor = attr.backdropFloor; ctx.modelBackdropFloor = attr.modelBackdropFloor; }
+    };
+    apply(await withTimeout(salesP, 900, null), await withTimeout(attrP, 900, null));
     const extra = {
       reply_markup: alertKeyboard(ctx.item),
       link_preview_options: { url: nftUrl(ctx.item.slug), prefer_large_media: true, show_above_text: false },
     };
     const msg = await this.tg.send(chatId, formatAlert(ctx), extra);
-    if (!ctx.sales) {
-      salesPromise.then(sales => {
-        ctx.sales = sales || [];
+    if (!ctx.sales || ctx.backdropFloor === undefined) {
+      Promise.all([salesP, attrP]).then(([sales, attr]) => {
+        apply(sales, attr);
         return this.tg.edit(chatId, msg.message_id, formatAlert(ctx), extra);
       }).catch(() => {});
     }
