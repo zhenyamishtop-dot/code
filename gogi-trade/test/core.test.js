@@ -202,7 +202,19 @@ test('backdrop floors: cheapest lot over markets, model filter, formatting', asy
   const text = formatAlert({ type: 'listing', item: item(), modelFloors: {}, collectionFloor: 148, sales: [], backdropFloor: any, modelBackdropFloor: null }, NOW);
   const lines = text.split('\n');
   const iColl = lines.findIndex(l => l.includes('Флор коллекции на MRKT'));
-  assert.match(lines[iColl + 1], /^🎨 Флор коллекции по фону: <b>36 TON<\/b> на <a href="https:\/\/t\.me\/portals\/market\?startapp=gift_p2">Portals<\/a>/);
-  assert.equal(lines[iColl + 2], '💎 Флор модели и фона: —');
+  assert.match(lines[iColl + 1], /^🎨 Флор коллекции по фону \(без этого\): <b>36 TON<\/b> на <a href="https:\/\/t\.me\/portals\/market\?startapp=gift_p2">Portals<\/a>/);
+  assert.equal(lines[iColl + 2], '💎 Флор модели и фона (без этого): —');
   assert.ok(lines.slice(iColl + 3).some(l => l.includes('ПОСЛЕДНИЕ ПРОДАЖИ')));
+});
+
+test('backdrop floors exclude the alerted gift itself', async () => {
+  const { Notifier } = await import('../src/notifier.js');
+  const lots = { portals: [{ slug: 'ToyBear-1', giftId: 'a', modelName: 'Cotton', normalizedPrice: 30 }, { slug: 'ToyBear-2', giftId: 'b', modelName: 'Peanut', normalizedPrice: 33 }, { slug: 'ToyBear-3', giftId: 'c', modelName: 'Cotton', normalizedPrice: 35 }] };
+  const sat = { search: async m => lots[m] || [] };
+  const n = new Notifier({ tg: null, sat, floors: null, catalog: null, store: null });
+  const r = await n.attrFloors({ slug: 'ToyBear-1', collectionName: 'Toy Bear', modelName: 'Cotton', backdropName: 'Black' });
+  assert.equal(r.backdropFloor.slug, 'ToyBear-2');
+  assert.equal(r.modelBackdropFloor.slug, 'ToyBear-3');
+  const alone = await n.attrFloors({ slug: 'ToyBear-9', collectionName: 'Toy Bear', modelName: 'Peanut', backdropName: 'Black' });
+  assert.equal(alone.modelBackdropFloor.slug, 'ToyBear-2');
 });

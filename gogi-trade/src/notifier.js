@@ -90,8 +90,8 @@ export function formatAlert(ctx, now = Date.now()) {
       return `${mark} ${MARKET_TITLES[m]}: ${f != null ? `<b>${fmtTon(f)} TON</b>${pct(price, f)}${best}` : '—'}`;
     }),
     `🟧 Флор коллекции на ${h(market)}: <b>${fmtTon(ctx.collectionFloor)} TON</b>${pct(price, ctx.collectionFloor)}`,
-    `🎨 Флор коллекции по фону: ${formatAttrFloor(ctx.backdropFloor, price)}`,
-    `💎 Флор модели и фона: ${formatAttrFloor(ctx.modelBackdropFloor, price)}`,
+    `🎨 Флор коллекции по фону (без этого): ${formatAttrFloor(ctx.backdropFloor, price)}`,
+    `💎 Флор модели и фона (без этого): ${formatAttrFloor(ctx.modelBackdropFloor, price)}`,
     '',
     `🕓 <b>ПОСЛЕДНИЕ ПРОДАЖИ МОДЕЛИ</b>`,
     `<blockquote expandable>${formatSales(ctx.sales, now)}</blockquote>`,
@@ -138,20 +138,23 @@ export class Notifier {
   }
 
   /**
-   * Cheapest lot of the collection with the same backdrop (any model) and with the same model + backdrop,
-   * over all markets. The backdrop search usually already contains the model; a second, narrower search
+   * Cheapest other lot of the collection with the same backdrop (any model) and with the same model + backdrop,
+   * over all markets (the alerted gift is excluded). The backdrop search usually already contains the model; a second, narrower search
    * is made only when the 50 cheapest backdrop lots have no lot of this model.
    */
   async attrFloors(item) {
     const col = item.collectionName;
+    // the alerted gift itself is left out, so the floors show what else is on sale to compare with
+    const self = String(item.slug || '').toLowerCase();
+    const other = it => String(it.slug || '').toLowerCase() !== self;
     const byBackdrop = await this.searchAll(col, { models: [], backdrops: [item.backdropName], symbols: [] });
-    const backdropFloor = cheapestOf(byBackdrop);
-    const sameModel = it => norm(it.modelName) === norm(item.modelName);
+    const backdropFloor = cheapestOf(byBackdrop, other);
+    const sameModel = it => other(it) && norm(it.modelName) === norm(item.modelName);
     let modelBackdropFloor = cheapestOf(byBackdrop, sameModel);
     const truncated = Object.values(byBackdrop).some(r => Array.isArray(r) && r.length >= 50);
     if (truncated) {
       const narrow = await this.searchAll(col, { models: [item.modelName], backdrops: [item.backdropName], symbols: [] });
-      modelBackdropFloor = cheapestOf(narrow) || modelBackdropFloor;
+      modelBackdropFloor = cheapestOf(narrow, other) || modelBackdropFloor;
     }
     return { backdropFloor, modelBackdropFloor };
   }
