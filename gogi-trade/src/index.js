@@ -9,6 +9,7 @@ import { Telegram } from './telegram.js';
 import { Bot } from './bot.js';
 import { createServer } from './server.js';
 import { buildTargets } from './filters.js';
+import { norm } from './util.js';
 
 assertConfig();
 
@@ -25,7 +26,13 @@ const tg = new Telegram();
 let targets = buildTargets(store.activeUsers());
 store.onChange(() => { targets = buildTargets(store.activeUsers()); });
 
-const poller = new Poller(sat, floors, () => targets);
+// Deep scan: models that do not fit into the 50 cheapest lots get their own queries (DEEP_SCAN=0 turns it off)
+const modelsOf = name => {
+  const d = catalog.data.details[norm(catalog.resolve(name) || name)];
+  if (!d) { catalog.details(name).catch(() => {}); return null; }
+  return d.models.map(m => m.name);
+};
+const poller = new Poller(sat, floors, () => targets, { modelsOf, deep: process.env.DEEP_SCAN !== '0' });
 const notifier = new Notifier({ tg, sat, floors, catalog, store });
 const bot = new Bot({ tg, store, catalog, poller, notifier, floors, sat });
 

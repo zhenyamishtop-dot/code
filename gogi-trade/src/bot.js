@@ -53,7 +53,8 @@ export class Bot {
   statusText(userId) {
     const s = this.store.user(userId).settings;
     const active = s.rules.filter(r => r.enabled !== false);
-    const cycle = this.poller.cycleSeconds();
+    const cyc = this.poller.cycles();
+    const cycle = cyc.fast;
     const cat = this.catalog.progress();
     const lines = [
       `<b>Gogi Trade</b> — ${s.enabled ? '🟢 работает' : '⏸ на паузе'}`,
@@ -61,7 +62,8 @@ export class Bot {
       `Коллекций в фильтрах: <b>${active.length}</b>`,
       `Маркеты: ${MARKETS.filter(m => s.markets[m] !== false).map(m => MARKET_TITLES[m]).join(' · ') || '—'}`,
       `Ключей Gift Satellite: <b>${this.sat.activeKeys().length}</b>` + (this.sat.activeKeys().length < this.sat.keyCount ? ` (отключено: ${this.sat.keyCount - this.sat.activeKeys().length})` : ''),
-      active.length ? `Полный круг опроса: <b>~${Math.max(1, Math.round(cycle))} сек</b> на каждый маркет` : 'Добавьте коллекции — и я начну следить.',
+      active.length ? `Самые дешёвые лоты: круг <b>~${Math.max(1, Math.round(cycle))} сек</b> на каждый маркет` : 'Добавьте коллекции — и я начну следить.',
+      ...(active.length && this.poller.deep ? [`Все модели (глубокое сканирование): круг <b>~${Math.max(1, Math.round(cyc.deep))} сек</b> · запросов ${cyc.queries}`] : []),
       '',
       ...MARKETS.map(m => {
         const st = this.poller.stats[m];

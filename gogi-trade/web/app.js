@@ -77,7 +77,8 @@
   const ruleOf = name => state.settings.rules.find(r => norm(r.collection) === norm(name));
   const activeCount = () => state.settings.rules.filter(r => r.enabled !== false).length;
   // every Gift Satellite key polls its share of collections in parallel (1 req/s per market each)
-  const cycleFor = n => Math.max(1, Math.round(Math.ceil(n / Math.max(1, state.status?.keys || 1)) * 1.05));
+  // with deep scan on, cheap-lot queries and deep queries alternate, so the fast pass takes twice as long
+  const cycleFor = n => Math.max(1, Math.round(Math.ceil(n / Math.max(1, state.status?.keys || 1)) * 1.05 * (state.status?.deepSeconds != null ? 2 : 1)));
 
   // ---- ticker: top collections by 24h volume ----
   function renderTicker() {
@@ -102,7 +103,7 @@
     live.replaceChildren();
     if (!s.enabled) live.append(el('span', { class: 'dot warn' }), 'Пауза');
     else if (!active) live.append(el('span', { class: 'dot' }), 'Выберите коллекции');
-    else live.append(el('span', { class: 'dot live' }), `LIVE · круг ~${cycle} сек`);
+    else live.append(el('span', { class: 'dot live' }), `LIVE · круг ~${cycle} сек` + (st?.deepSeconds ? ` · все модели ~${Math.max(1, Math.round(st.deepSeconds))} сек` : ''));
     $('master').checked = s.enabled;
     $('drops').checked = s.priceDrops !== false;
     $('dropRow').hidden = s.priceDrops === false;

@@ -4,6 +4,19 @@ import { config, MARKETS } from './config.js';
 import { sleep } from './util.js';
 
 const STATE_TTL_MS = 10 * 60_000;
+const MAX_DEPTH = 10; // deep-scan slices per (collection, market)
+const SLICE_RESET_MS = 30 * 60_000; // deep slices are rebuilt from scratch this often
+const pageSizeOf = market => (market === 'telegram' ? 100 : 50);
+const lc = s => String(s || '').toLowerCase();
+
+/**
+ * Search returns only the N cheapest lots, so models whose cheapest lot is above that window are invisible.
+ * Given a full window, returns the models of `universe` that did not appear in it (they get their own query).
+ */
+export function missingModels(universe, items) {
+  const present = new Set(items.map(i => lc(i.modelName)));
+  return universe.filter(m => !present.has(lc(m)));
+}
 
 export function listingTime(item) {
   const t = Math.max(Number(item.eventAt) || 0, Date.parse(item.createdAt) || 0);
@@ -45,11 +58,15 @@ export function diffListings(state, items, { now = Date.now(), freshWindowMs = c
 }
 
 export class Poller extends EventEmitter {
-  constructor(sat, floors, getTargets) {
+  constructor(sat, floors, getTargets, { modelsOf = () => null, deep = true } = {}) {
     super();
     this.sat = sat;
     this.floors = floors;
     this.getTargets = getTargets;
+    this.modelsOf = modelsOf; // collection -> [model names] | null (catalog not loaded yet)
+    this.deep = deep;
+    this.slices = new Map(); // "market|parentKey" -> child slice target (models missing from the parent's window)
+    this.tick = {}; // market#key -> counter used to interleave fast and deep queries
     this.states = new Map(); // market|targetKey -> { baselined, seen, touched }
     this.cursor = {}; // market#key -> position in the assigned list
     this.stats = Object.fromEntries(MARKETS.map(m => [m, { polls: 0, errors: 0, lastPollAt: 0, lastError: null, lastMs: 0 }]));
@@ -76,12 +93,52 @@ export class Poller extends EventEmitter {
    * over the working keys, so N keys make the cycle N times shorter.
    */
   assigned(market, slot) {
+    const { base, deep } = this.targetsFor(market);
     const keys = this.sat.activeKeys();
-    const targets = this.getTargets().filter(t => t.markets.includes(market));
-    if (!keys.length) return slot === 0 ? targets : [];
+    if (!keys.length) return slot === 0 ? { base, deep } : { base: [], deep: [] };
     const pos = keys.indexOf(slot);
-    if (pos < 0) return [];
-    return targets.filter((_, i) => i % keys.length === pos);
+    if (pos < 0) return { base: [], deep: [] };
+    const mine = list => list.filter((_, i) => i % keys.length === pos);
+    return { base: mine(base), deep: mine(deep) };
+  }
+
+  /** Base targets of a market plus the deep-scan slices hanging off them. */
+  targetsFor(market) {
+    const base = this.getTargets().filter(t => t.markets.includes(market));
+    const deep = [];
+    if (this.deep) for (const t of base) {
+      for (let s = this.slices.get(market + '|' + t.key); s; s = this.slices.get(market + '|' + s.key)) deep.push(s);
+    }
+    return { base, deep };
+  }
+
+  /** Keeps the child slice of `target` in sync with the models missing from its latest window. */
+  updateSlice(market, target, items) {
+    const slot = market + '|' + target.key;
+    const drop = () => { for (let k = slot, s; (s = this.slices.get(k)); k = market + '|' + s.key) this.slices.delete(k); };
+    const full = items.length >= pageSizeOf(market);
+    const universe = target.query.models.length ? target.query.models : this.modelsOf(target.collection);
+    if (!this.deep || !full || !universe?.length || (target.depth || 0) >= MAX_DEPTH) return drop();
+    const missing = missingModels(universe, items);
+    if (!missing.length) return drop();
+    const now = Date.now();
+    let child = this.slices.get(slot);
+    if (!child) {
+      child = { collection: target.collection, markets: [market], depth: (target.depth || 0) + 1, key: target.key + '>', models: [], resetAt: now };
+      this.slices.set(slot, child);
+    }
+    // grow the slice right away; shrink it only on the periodic rebuild (avoids flapping at the window edge)
+    const rebuild = now - child.resetAt > SLICE_RESET_MS;
+    const next = rebuild ? missing : [...new Set([...child.models, ...missing])];
+    if (rebuild) child.resetAt = now;
+    if (next.length !== child.models.length || next.some((m, i) => m !== child.models[i])) {
+      const added = next.some(m => !child.models.includes(m));
+      child.models = next;
+      child.query = { ...target.query, models: next };
+      // Telegram lots have no listing time: a widened query must re-baseline or old lots look new
+      const st = this.states.get(market + '|' + child.key);
+      if (added && market === 'telegram' && st) { st.baselined = false; st.seen.clear(); }
+    }
   }
 
   async loop(market, key) {
@@ -93,9 +150,13 @@ export class Poller extends EventEmitter {
   async run(market, key, cursorKey) {
     while (this.running) {
       if (key >= this.sat.keyCount) return;
-      const targets = this.assigned(market, key);
-      if (!targets.length) { await sleep(700); continue; }
-      const target = targets[(this.cursor[cursorKey] = (this.cursor[cursorKey] || 0) + 1) % targets.length];
+      const { base, deep } = this.assigned(market, key);
+      if (!base.length && !deep.length) { await sleep(700); continue; }
+      // every other request goes to the deep slices, so the cheapest lots stay fast and the rest is still seen
+      const useDeep = deep.length && (!base.length || (this.tick[cursorKey] = (this.tick[cursorKey] || 0) + 1) % 2 === 0);
+      const list = useDeep ? deep : base;
+      const ck = cursorKey + (useDeep ? ':deep' : '');
+      const target = list[(this.cursor[ck] = (this.cursor[ck] || 0) + 1) % list.length];
       const st = this.stats[market];
       const t0 = Date.now();
       try {
@@ -112,7 +173,7 @@ export class Poller extends EventEmitter {
   process(market, target, items) {
     const key = market + '|' + target.key;
     let state = this.states.get(key);
-    if (!state) { state = { baselined: false, seen: new Map(), touched: 0, pageSize: market === 'telegram' ? 100 : 50 }; this.states.set(key, state); }
+    if (!state) { state = { baselined: false, seen: new Map(), touched: 0, pageSize: pageSizeOf(market) }; this.states.set(key, state); }
     // a target that was not polled for a while starts from a fresh baseline
     if (state.touched && Date.now() - state.touched > STATE_TTL_MS) { state.baselined = false; state.seen.clear(); }
     state.touched = Date.now();
@@ -129,15 +190,27 @@ export class Poller extends EventEmitter {
       }
     }
     for (const ev of diffListings(state, items)) this.emit(ev.type, { ...ev, market, detectedAt: Date.now() });
+    this.updateSlice(market, target, items);
 
     if (this.states.size > 2000) for (const [k, s] of this.states) if (Date.now() - s.touched > STATE_TTL_MS) this.states.delete(k);
   }
 
-  /** Seconds one full pass over all targets takes on the busiest market (keys poll in parallel). */
-  cycleSeconds() {
-    const targets = this.getTargets();
+  /**
+   * Seconds one pass takes on the busiest market (keys poll in parallel).
+   * Fast pass = cheapest lots of every collection; deep pass = every model of every collection.
+   */
+  cycleSeconds() { return this.cycles().fast; }
+  cycles() {
     const keys = Math.max(1, this.sat.activeKeys().length);
-    const perMarket = MARKETS.map(m => Math.ceil(targets.filter(t => t.markets.includes(m)).length / keys));
-    return Math.max(0, ...perMarket) * config.searchGapMs / 1000;
+    let fast = 0, deep = 0, queries = 0;
+    for (const m of MARKETS) {
+      const { base, deep: d } = this.targetsFor(m);
+      queries += base.length + d.length;
+      const share = d.length && base.length ? 2 : 1; // base and deep queries alternate
+      fast = Math.max(fast, Math.ceil(base.length / keys) * share);
+      deep = Math.max(deep, Math.ceil(d.length / keys) * share, Math.ceil(base.length / keys) * share);
+    }
+    const sec = n => n * config.searchGapMs / 1000;
+    return { fast: sec(fast), deep: sec(deep), queries };
   }
 }

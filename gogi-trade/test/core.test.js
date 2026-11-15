@@ -156,7 +156,7 @@ test('multiple keys: search load is split between keys, each key has its own rat
   const targets = ['A', 'B', 'C', 'D', 'E', 'F'].map(c => ({ collection: c, markets: ['portals'], query: { models: [], backdrops: [], symbols: [] }, key: c }));
   const poller = new Poller(sat, { observeCollectionFloor() {} }, () => targets);
   // every collection belongs to exactly one key
-  const parts = [0, 1, 2].map(k => poller.assigned('portals', k).map(t => t.collection));
+  const parts = [0, 1, 2].map(k => poller.assigned('portals', k).base.map(t => t.collection));
   assert.deepEqual(parts.flat().sort(), ['A', 'B', 'C', 'D', 'E', 'F']);
   assert.ok(parts.every(p => p.length === 2));
   assert.ok(Math.abs(poller.cycleSeconds() - 2 * 1.05) < 1e-9);
@@ -167,8 +167,8 @@ test('multiple keys: search load is split between keys, each key has its own rat
   assert.deepEqual(calls.map(c => c.key).sort(), ['Token k1', 'Token k2', 'Token k3']);
   // a rejected key is disabled and its collections move to the others
   sat.keyStats[1].disabled = true;
-  assert.deepEqual(poller.assigned('portals', 1), []);
-  assert.deepEqual([0, 2].map(k => poller.assigned('portals', k).length), [3, 3]);
+  assert.deepEqual(poller.assigned('portals', 1).base, []);
+  assert.deepEqual([0, 2].map(k => poller.assigned('portals', k).base.length), [3, 3]);
   assert.ok(Math.abs(poller.cycleSeconds() - 3 * 1.05) < 1e-9);
 });
 
@@ -232,4 +232,37 @@ test('telegram market: no listing time, new lots detected inside the previous pr
   const tgText = formatAlert({ type: 'listing', item: { ...lot('SnakeBox-126488', 6.48), number: undefined, collectionName: 'Snake Box' }, modelFloors: {}, sales: [] }, NOW);
   assert.match(tgText, /Snake Box #126488/);
   assert.match(tgText, /<b>6\.48 TON<\/b> · <a href=\"https:\/\/t\.me\/nft\/SnakeBox-126488\">Telegram<\/a>/);
+});
+
+import { missingModels, Poller } from '../src/poller.js';
+
+test('missingModels: models absent from a full window', () => {
+  assert.deepEqual(missingModels(['A', 'B', 'C'], [{ modelName: 'a' }, { modelName: 'C' }]), ['B']);
+});
+
+test('deep scan: a full window spawns a slice for the missing models, a partial one removes it', () => {
+  const sat = { activeKeys: () => [0], keyCount: 1 };
+  const floors = { observeCollectionFloor() {} };
+  const base = { collection: 'Coll', markets: ['mrkt'], query: { models: [], backdrops: [], symbols: [] }, key: 'coll|{}' };
+  const p = new Poller(sat, floors, () => [base], { modelsOf: () => ['A', 'B', 'C', 'D'] });
+  const full = Array.from({ length: 50 }, (_, i) => ({ giftId: 'g' + i, normalizedPrice: 1 + i, modelName: i % 2 ? 'A' : 'B' }));
+  p.process('mrkt', base, full);
+  let { deep } = p.targetsFor('mrkt');
+  assert.equal(deep.length, 1);
+  assert.deepEqual(deep[0].query.models, ['C', 'D']);
+  // the slice itself is full and misses D -> second level
+  p.process('mrkt', deep[0], Array.from({ length: 50 }, (_, i) => ({ giftId: 'c' + i, normalizedPrice: 9 + i, modelName: 'C' })));
+  assert.deepEqual(p.targetsFor('mrkt').deep.map(s => s.query.models), [['C', 'D'], ['D']]);
+  // parent window no longer full: everything is visible, slices go away
+  p.process('mrkt', base, full.slice(0, 10));
+  assert.equal(p.targetsFor('mrkt').deep.length, 0);
+  assert.equal(p.assigned('mrkt', 0).base.length, 1);
+});
+
+test('deep scan: unknown model list (catalog not loaded) keeps a single query', () => {
+  const sat = { activeKeys: () => [0], keyCount: 1 };
+  const base = { collection: 'Coll', markets: ['mrkt'], query: { models: [], backdrops: [], symbols: [] }, key: 'k' };
+  const p = new Poller(sat, { observeCollectionFloor() {} }, () => [base], { modelsOf: () => null });
+  p.process('mrkt', base, Array.from({ length: 50 }, (_, i) => ({ giftId: 'g' + i, normalizedPrice: 1, modelName: 'A' })));
+  assert.equal(p.targetsFor('mrkt').deep.length, 0);
 });
